@@ -14,6 +14,7 @@ export function QuickInput({ onSaved }: QuickInputProps) {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [expanded, setExpanded] = useState(false)
+  const [focused, setFocused] = useState(false)
   const [tagEditorOpen, setTagEditorOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle')
@@ -99,14 +100,18 @@ export function QuickInput({ onSaved }: QuickInputProps) {
             setContent(event.target.value)
             setDraftStatus(event.target.value ? 'saving' : 'idle')
           }}
-          onFocus={() => setExpanded(true)}
+          onFocus={() => {
+            setFocused(true)
+            setExpanded(true)
+          }}
+          onBlur={() => setFocused(false)}
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
               event.preventDefault()
               void handleSave()
             }
           }}
-          placeholder="写下此刻…"
+          placeholder={focused ? '写下此刻…' : '这里还很安静'}
         />
       </div>
 

@@ -49,8 +49,6 @@ export function TimelineDayGroup({
             />
           ))}
         </div>
-      ) : variant === 'today' ? (
-        <p className="timeline-empty">这里还很安静。</p>
       ) : null}
 
       {children ? <div className="timeline-day-composer">{children}</div> : null}

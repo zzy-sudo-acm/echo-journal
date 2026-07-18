@@ -15,9 +15,10 @@ import type { JournalFont } from '../store/uiStore'
 
 const fontOptions: Array<{ value: JournalFont; label: string }> = [
   { value: 'modern', label: '现代' },
+  { value: 'wenkai', label: '文楷' },
   { value: 'serif', label: '宋体' },
-  { value: 'kai', label: '楷体' },
   { value: 'fangsong', label: '仿宋' },
+  { value: 'handwriting', label: '手写' },
 ]
 
 export function SettingsPage() {
@@ -91,13 +92,13 @@ export function SettingsPage() {
                   type="button"
                   key={option.value}
                   className={`font-choice ${journalFont === option.value ? 'active' : ''}`}
-                  data-journal-font={option.value}
+                  data-font-preview={option.value}
                   role="radio"
                   aria-checked={journalFont === option.value}
                   onClick={() => void setJournalFont(option.value)}
                 >
                   <strong>{option.label}</strong>
-                  <span>写下今天的心事</span>
+                  <span>今天的风，比昨天慢了一点。</span>
                 </button>
               ))}
             </div>

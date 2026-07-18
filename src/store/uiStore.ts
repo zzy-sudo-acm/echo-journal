@@ -2,7 +2,16 @@ import { create } from 'zustand'
 import { settingsRepo } from '../db/repository'
 
 export type Theme = 'dark' | 'light'
-export type JournalFont = 'modern' | 'serif' | 'kai' | 'fangsong'
+export type JournalFont = 'modern' | 'wenkai' | 'serif' | 'fangsong' | 'handwriting'
+
+const journalFonts = new Set<JournalFont>(['modern', 'wenkai', 'serif', 'fangsong', 'handwriting'])
+
+function normalizeJournalFont(value: unknown): JournalFont {
+  if (value === 'kai') return 'wenkai'
+  return typeof value === 'string' && journalFonts.has(value as JournalFont)
+    ? value as JournalFont
+    : 'modern'
+}
 
 interface UIState {
   theme: Theme
@@ -29,12 +38,18 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   initAppearance: async () => {
-    const [theme, journalFont] = await Promise.all([
+    const [theme, savedJournalFont] = await Promise.all([
       settingsRepo.get<Theme>('theme', 'dark'),
-      settingsRepo.get<JournalFont>('journalFont', 'modern'),
+      settingsRepo.get<unknown>('journalFont', 'modern'),
     ])
+    const journalFont = normalizeJournalFont(savedJournalFont)
+
     set({ theme, journalFont })
     document.documentElement.setAttribute('data-theme', theme)
     document.documentElement.setAttribute('data-journal-font', journalFont)
+
+    if (journalFont !== savedJournalFont) {
+      await settingsRepo.set('journalFont', journalFont)
+    }
   },
 }))

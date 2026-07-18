@@ -15,12 +15,13 @@ describe('QuickInput', () => {
 
   it('reveals tags on demand, restores the full draft, and saves with the current time', async () => {
     const { unmount } = render(<QuickInput />)
-    const textarea = screen.getByPlaceholderText('写下此刻…')
+    const textarea = screen.getByPlaceholderText('这里还很安静')
 
     expect(screen.queryByText('记下')).toBeNull()
     expect(document.querySelector("input[type='datetime-local']")).toBeNull()
 
     fireEvent.focus(textarea)
+    expect(textarea.getAttribute('placeholder')).toBe('写下此刻…')
     fireEvent.change(textarea, { target: { value: '一段临时想法' } })
     expect(screen.getByText('记下')).toBeTruthy()
 
@@ -56,5 +57,7 @@ describe('QuickInput', () => {
 
     expect(screen.queryByText('记下')).toBeNull()
     expect((restored as HTMLTextAreaElement).value).toBe('')
+    fireEvent.blur(restored)
+    expect(restored.getAttribute('placeholder')).toBe('这里还很安静')
   })
 })

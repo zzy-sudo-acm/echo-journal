@@ -38,8 +38,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-        runtimeCaching: [],
+        globPatterns: ['**/*.{js,css,html,svg}'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === 'font',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'echo-journal-fonts',
+              expiration: {
+                maxEntries: 12,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

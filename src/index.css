@@ -1,3 +1,67 @@
+@font-face {
+  font-family: 'Echo Journal WenKai';
+  src: url('/echo-journal/fonts/journal-wenkai.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Journal Serif';
+  src: url('/echo-journal/fonts/journal-serif.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Journal Fangsong';
+  src: url('/echo-journal/fonts/journal-fangsong.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Journal Handwriting';
+  src: url('/echo-journal/fonts/journal-handwriting.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Preview WenKai';
+  src: url('/echo-journal/fonts/preview-wenkai.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Preview Serif';
+  src: url('/echo-journal/fonts/preview-serif.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Preview Fangsong';
+  src: url('/echo-journal/fonts/preview-fangsong.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Echo Preview Handwriting';
+  src: url('/echo-journal/fonts/preview-handwriting.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
 :root {
   color-scheme: dark;
   --bg-primary: #071927;
@@ -105,20 +169,31 @@
   --journal-line-height: 1.8;
 }
 
-[data-journal-font='serif'] {
-  --journal-font: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Source Han Serif SC', 'SimSun', serif;
+[data-journal-font='wenkai'] {
+  --journal-font: 'Echo Journal WenKai', 'LXGW WenKai Screen', 'Kaiti SC', 'STKaiti', serif;
   --journal-line-height: 1.9;
 }
 
-[data-journal-font='kai'] {
-  --journal-font: 'Kaiti SC', 'STKaiti', 'KaiTi', 'Noto Serif CJK SC', 'Songti SC', serif;
-  --journal-line-height: 1.95;
+[data-journal-font='serif'] {
+  --journal-font: 'Echo Journal Serif', 'Source Han Serif CN', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --journal-line-height: 1.9;
 }
 
 [data-journal-font='fangsong'] {
-  --journal-font: 'FangSong', 'STFangsong', 'FangSong_GB2312', 'Songti SC', 'STSong', serif;
+  --journal-font: 'Echo Journal Fangsong', 'Zhuque Fangsong', 'FangSong', 'STFangsong', 'FangSong_GB2312', serif;
   --journal-line-height: 1.9;
 }
+
+[data-journal-font='handwriting'] {
+  --journal-font: 'Echo Journal Handwriting', 'ChenYuluoyan', 'Kaiti SC', 'STKaiti', cursive;
+  --journal-line-height: 1.95;
+}
+
+[data-font-preview='modern'] { --journal-preview-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+[data-font-preview='wenkai'] { --journal-preview-font: 'Echo Preview WenKai', 'Kaiti SC', serif; }
+[data-font-preview='serif'] { --journal-preview-font: 'Echo Preview Serif', 'Songti SC', serif; }
+[data-font-preview='fangsong'] { --journal-preview-font: 'Echo Preview Fangsong', 'FangSong', serif; }
+[data-font-preview='handwriting'] { --journal-preview-font: 'Echo Preview Handwriting', 'Kaiti SC', cursive; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -422,6 +497,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .timeline-day-card.is-empty .quick-input-topline, .timeline-day-card.is-empty .quick-input-details { margin-left: 0; }
 .quick-input-topline { position: relative; display: flex; align-items: flex-start; }
 .quick-input textarea { min-height: 50px; max-height: 220px; padding: 12px 0; border: 0; border-radius: 0; background: transparent; resize: none; font-family: var(--journal-font); font-size: 1rem; line-height: var(--journal-line-height); }
+.quick-input textarea::placeholder { color: var(--text-tertiary); font-family: var(--journal-font); opacity: .68; }
 .quick-input.is-expanded textarea { min-height: 126px; }
 .quick-input textarea:focus { border: 0; }
 .quick-input textarea:focus-visible { outline: 0; }
@@ -533,7 +609,7 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
 .font-choice {
   display: grid;
   min-width: 0;
-  min-height: 72px;
+  min-height: 90px;
   align-content: center;
   gap: 5px;
   padding: 10px 12px;
@@ -543,7 +619,7 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
   text-align: left;
 }
 .font-choice strong { color: var(--text-primary); font-family: var(--font-sans); font-size: .78rem; font-weight: 600; }
-.font-choice span { min-width: 0; overflow: hidden; color: var(--text-secondary); font-family: var(--journal-font); font-size: .86rem; text-overflow: ellipsis; white-space: nowrap; }
+.font-choice span { min-width: 0; color: var(--text-secondary); font-family: var(--journal-preview-font); font-size: .82rem; line-height: 1.55; overflow-wrap: anywhere; }
 .font-choice.active { border-color: color-mix(in srgb, var(--accent) 62%, var(--border)); background: var(--accent-bg); }
 .settings-disclosure { display: flex; width: 100%; min-height: 64px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); text-align: left; }
 .settings-section > .settings-disclosure:first-child, .settings-links > :first-child { border-radius: 12px 12px 0 0; }
