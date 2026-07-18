@@ -1,39 +1,35 @@
-# 回声日记（Echo Journal）
+# 回声日记 / Echo Journal
 
-> 私人日记 PWA — 本地优先、随时记录、安全备份
+> 一款本地优先、离线可用的极简日记应用
 
-回声日记是一个移动端优先、本地优先的私人日记应用。所有数据保存在你的设备中，不上传到任何服务器。
+回声日记是一款移动端优先、本地优先的私人日记应用。数据默认保存在浏览器或 App 本地 IndexedDB 中，无需注册账号，不上传任何服务器。
 
-## 产品定位
+## 功能
 
-- **碎片记录为主**：一句话、一段想法或一篇完整日记，都可以随时记录
-- **本地优先**：数据默认保存在当前设备 IndexedDB 中
-- **隐私第一**：不接入 AI、不上传日记、不需要账户
-- **手动备份**：通过统一的导出/导入功能在设备间迁移数据
+- 日记记录（标题、正文、时间、标签）
+- 快速记录与草稿自动保存
+- 今日时间线与过去的今天
+- 月历浏览
+- 标签筛选与全文搜索
+- 回收站（软删除 + 撤销）
+- ZIP 完整备份、导入与恢复
+- 内部每日快照
+- PWA 可安装、离线可用
+- 深色 / 浅色主题
+- 多款正文字体（现代、圆体、书卷、个性、手写）
+- **当前版本不包含 AI 功能**
 
-## 技术栈
+## 在线使用
 
-- **框架**：React 19 + TypeScript
-- **构建**：Vite 8
-- **数据**：IndexedDB（Dexie.js）
-- **状态**：Zustand
-- **路由**：React Router（Hash 模式）
-- **PWA**：vite-plugin-pwa + Workbox
-- **测试**：Vitest + fake-indexeddb
-- **部署**：GitHub Pages + GitHub Actions
+网页版地址：
 
-## 数据存储
+https://zzy-sudo-acm.github.io/echo-journal/
 
-- **日记正文、标签、草稿、内部备份** → IndexedDB
-- **主题偏好** → IndexedDB settings 表
-- **不使用的存储**：localStorage（仅 PWA 框架使用）、SessionStorage
-- 数据访问层独立封装（`src/db/repository.ts`），方便未来迁移到其他存储方案
-
-## 本地运行
+## 本地开发
 
 ```bash
 # 安装依赖
-npm install
+npm ci
 
 # 启动开发服务器
 npm run dev
@@ -41,81 +37,51 @@ npm run dev
 # 运行测试
 npm test
 
-# 构建生产版本
+# 代码检查
+npm run lint
+
+# 构建网页版
 npm run build
 
-# 预览生产版本
-npm run preview
+# 构建 Android APK
+npm run build:android
+npx cap sync android
+cd android && .\gradlew.bat assembleDebug
 ```
 
-## 数据备份
+## 技术栈
 
-### 导出备份
-
-点击「设置 → 导出备份」可导出全部数据。备份文件包含：
-- `backup.json` — 完整恢复数据
-- `journal.md` — 人类可读的 Markdown 日记（即使项目停止维护也能直接阅读）
-- `manifest.json` — 备份元信息
-
-### 导入备份
-
-点击「设置 → 导入备份」可选择备份文件导入。支持两种模式：
-1. **合并数据**：将备份日记合并到当前数据，重复自动跳过
-2. **替换当前数据**：清空当前数据后导入（自动备份当前内容，失败时自动回滚）
-
-### 内部快照
-
-应用每天自动创建内部快照，默认保留最近 7 份。可手动标记永久保留。
-
-## 功能
-
-- ✅ 快速记录（支持 Markdown）
-- ✅ 草稿自动保存
-- ✅ 日记新建、编辑、删除
-- ✅ 今日时间线
-- ✅ 月历浏览
-- ✅ 标签管理
-- ✅ 全文搜索
-- ✅ 过去的今天
-- ✅ 导出备份（跨平台通用）
-- ✅ 导入备份（合并/替换，含回滚）
-- ✅ 内部每日快照
-- ✅ PWA（可安装、离线可用）
-- ✅ 深色/浅色主题
-
-## 第一版明确不做
-
-- AI 功能、云同步、用户账户
-- 社交、公开日记、情侣日记
-- 心理诊断、情绪分析
-- Tauri、Electron、独立 App
-- 图片/视频/录音附件
+- React 19 + TypeScript
+- Vite 8
+- IndexedDB (Dexie.js)
+- Zustand
+- React Router (Hash 模式)
+- vite-plugin-pwa + Workbox
+- Vitest + fake-indexeddb
+- Capacitor (Android)
+- GitHub Pages + GitHub Actions
 
 ## 跨平台使用
 
-- **iPhone Safari**：打开 Pages 地址 → 分享按钮 → 添加到主屏幕
-- **Android Chrome**：打开 Pages 地址 → 菜单 → 添加到主屏幕
-- **电脑浏览器**：直接访问 Pages 地址
+| 平台 | 方式 |
+|------|------|
+| Web | 直接访问 [Pages 地址](https://zzy-sudo-acm.github.io/echo-journal/) |
+| iOS | Safari → 分享 → 添加到主屏幕 |
+| Android | Chrome → 菜单 → 添加到主屏幕，或安装 APK |
+| 桌面 | 浏览器访问 Pages 地址 |
 
-## Pages 地址
+## 数据备份
 
-`https://zzy-sudo-acm.github.io/echo-journal/`
+数据仅保存在当前设备，不同设备间需手动导出/导入。请定期导出备份。
+
+备份文件包含 `backup.json`（完整恢复）和 `journal.md`（可阅读 Markdown）。
 
 ## 已知限制
 
-- 数据仅保存在当前设备，不同设备间需手动导出/导入
+- 数据仅保存在当前设备，无云同步
 - 浏览器可能清理 IndexedDB（请定期导出备份）
-- PWA 图标使用 SVG（部分旧系统可能不兼容）
 - 搜索为简单子串匹配，不支持全文索引
 - 第一版不支持图片和文件附件
-
-## 后续改进
-
-1. 端到端加密备份
-2. 图片/文件附件支持
-3. 全文搜索引擎（如 MiniSearch）
-4. WebDAV 自动备份
-5. 更丰富的回顾统计
 
 ---
 

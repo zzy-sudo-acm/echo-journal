@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android
+echo-journal-stable.apk
+android/local.properties
+android/app/build/
+android/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+capacitor.config.json
