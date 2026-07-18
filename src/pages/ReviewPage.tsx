@@ -41,9 +41,14 @@ export function ReviewPage() {
 
   const handleUpdate = async (input: CreateEntryInput) => {
     if (!editingEntry) return
-    await updateEntry(editingEntry.id, input)
-    await loadReview()
-    showToast('日记已更新', 'success')
+    try {
+      await updateEntry(editingEntry.id, input)
+      setEditingEntry(null)
+      void loadReview().catch(() => { /* refresh is best-effort */ })
+      showToast('日记已更新', 'success')
+    } catch {
+      showToast('更新失败', 'error')
+    }
   }
 
   const handleDelete = async () => {
@@ -52,8 +57,11 @@ export function ReviewPage() {
     setDeleting(true)
     try {
       await deleteEntry(deletedId)
+      // Remove from local state immediately
+      setEntries((current) => current.filter((entry) => entry.id !== deletedId))
       setDeletingEntry(null)
-      await loadReview()
+      // Background refresh
+      void loadReview().catch(() => { /* delete succeeded, refresh is best-effort */ })
       showToast('已移入回收站', 'success', {
         label: '撤销',
         action: async () => {

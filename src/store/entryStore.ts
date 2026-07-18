@@ -104,17 +104,20 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     set({ draft: null })
   },
 
-  /** Returns true if the local date changed (crossed midnight) */
+  /** Returns true if the local date changed (crossed midnight).
+   *  Only advances todayDate AFTER a successful loadToday().
+   *  On failure, keeps old todayDate so the next check will retry. */
   checkDateChange: () => {
     const current = getLocalDateString()
-    if (current !== get().todayDate) {
-      set({ todayDate: current })
-      // Reload today's entries — fire-and-forget with error handling
-      get().loadToday().catch(() => {
-        // Date refresh failed silently; state already updated
-      })
-      return true
+    if (current === get().todayDate) {
+      return false
     }
-    return false
+
+    // Fire-and-forget: only advance date on success
+    void get().loadToday().catch(() => {
+      // loadToday failed — todayDate unchanged, next check retries
+    })
+
+    return true
   },
 }))

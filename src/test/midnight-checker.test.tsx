@@ -1,11 +1,16 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MidnightChecker } from '../App'
+import { useEntryStore } from '../store/entryStore'
 
 describe('MidnightChecker', () => {
+  let checkSpy: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    checkSpy = vi.fn().mockReturnValue(false)
+    useEntryStore.setState({ checkDateChange: checkSpy } as any)
   })
 
   afterEach(() => {
@@ -14,12 +19,10 @@ describe('MidnightChecker', () => {
     vi.unstubAllGlobals()
   })
 
-  it('schedules a midnight check on mount', () => {
+  it('schedules a midnight timer on mount', () => {
     const { unmount } = render(<MidnightChecker />)
-    // Should have scheduled exactly one timer
     expect(vi.getTimerCount()).toBe(1)
     unmount()
-    // Timer should be cleared on unmount
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -30,40 +33,61 @@ describe('MidnightChecker', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('fires check at midnight and schedules next check', () => {
+  it('calls checkDateChange when timer fires, then schedules next check', () => {
     render(<MidnightChecker />)
+    expect(checkSpy).not.toHaveBeenCalled()
 
-    const initialCount = vi.getTimerCount()
-    expect(initialCount).toBe(1)
-
-    // Advance to midnight
     vi.advanceTimersToNextTimer()
+    expect(checkSpy).toHaveBeenCalledTimes(1)
 
-    // After firing, it should have scheduled another timer
+    // Should have scheduled the next timer
     expect(vi.getTimerCount()).toBe(1)
   })
 
-  it('checks on visibility change to visible', () => {
+  it('calls checkDateChange on visibility change to visible', () => {
     render(<MidnightChecker />)
 
-    // Simulate visibility change
     Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true })
     document.dispatchEvent(new Event('visibilitychange'))
 
-    // No exception thrown = check completed
+    expect(checkSpy).toHaveBeenCalled()
   })
 
-  it('check function handles errors gracefully', () => {
-    // Simulate: the check() function wraps checkDateChange in try/catch
-    const check = () => {
-      try {
-        throw new Error('simulated failure')
-      } catch {
-        // Non-critical — should not propagate
-      }
-    }
+  it('does not call checkDateChange when visibility is hidden', () => {
+    render(<MidnightChecker />)
 
-    // Should not throw
-    expect(() => check()).not.toThrow()
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    expect(checkSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not crash when checkDateChange throws', () => {
+    useEntryStore.setState({
+      checkDateChange: () => { throw new Error('crash') },
+    } as any)
+
+    const { unmount } = render(<MidnightChecker />)
+
+    // Timer fires — should not crash
+    expect(() => vi.advanceTimersToNextTimer()).not.toThrow()
+
+    // Visibility change — should not crash
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true })
+    expect(() => document.dispatchEvent(new Event('visibilitychange'))).not.toThrow()
+
+    unmount()
+  })
+
+  it('cleans up timer and visibility listener on unmount', () => {
+    const { unmount } = render(<MidnightChecker />)
+    unmount()
+
+    expect(vi.getTimerCount()).toBe(0)
+
+    // Dispatch visibility after unmount — should not call spy
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    // No crash and no call since listener removed
   })
 })

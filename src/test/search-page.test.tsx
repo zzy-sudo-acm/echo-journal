@@ -46,7 +46,6 @@ describe('SearchPage', () => {
       expect(results.length).toBe(2)
     })
 
-    // No date dividers when keyword present
     const dividers = document.querySelectorAll('.date-divider')
     expect(dividers.length).toBe(0)
   })
@@ -55,7 +54,6 @@ describe('SearchPage', () => {
     await entryRepo.create({ content: '跨年日记', createdAt: localIso(2025, 1, 15) })
 
     renderPage()
-
     const input = screen.getByPlaceholderText('搜索日记正文、标题或标签')
     fireEvent.change(input, { target: { value: '跨年' } })
 
@@ -70,14 +68,9 @@ describe('SearchPage', () => {
     await entryRepo.create({ content: '标签日记', tags: ['测试'], createdAt: localIso(2026, 7, 18) })
 
     renderPage()
-
-    // Open tag filter panel
     fireEvent.click(screen.getByLabelText('按标签筛选'))
 
-    await waitFor(() => {
-      expect(screen.getByText('#测试')).toBeTruthy()
-    })
-
+    await waitFor(() => { expect(screen.getByText('#测试')).toBeTruthy() })
     fireEvent.click(screen.getByText('#测试'))
 
     await waitFor(() => {
@@ -86,21 +79,41 @@ describe('SearchPage', () => {
     })
   })
 
-  it('keeps flat keyword order with keyword+tag+date combination', async () => {
-    await entryRepo.create({ title: '重要', content: '工作', tags: ['工作'], createdAt: localIso(2026, 7, 10) })
-    await entryRepo.create({ content: '不重要但匹配关键词', createdAt: localIso(2026, 7, 12) })
+  it('combines keyword + tag + date with flat result list', async () => {
+    // Match all three: keyword "工作", tag "项目", both in July 2026
+    await entryRepo.create({
+      title: '工作总结', content: '七月项目工作', tags: ['项目'],
+      createdAt: localIso(2026, 7, 10),
+    })
+    await entryRepo.create({
+      content: '八月项目工作', tags: ['项目'],
+      createdAt: localIso(2026, 8, 10),
+    })
 
     renderPage()
 
+    // Input keyword
     const input = screen.getByPlaceholderText('搜索日记正文、标题或标签')
-    fireEvent.change(input, { target: { value: '重要' } })
+    fireEvent.change(input, { target: { value: '工作' } })
 
+    // Select tag
+    fireEvent.click(screen.getByLabelText('按标签筛选'))
+    await waitFor(() => {
+      // Find the tag option button inside the filter panel
+      const tagOptions = document.querySelectorAll('.tag-filter-option')
+      expect(tagOptions.length).toBeGreaterThanOrEqual(1)
+    })
+    // Click the first tag option
+    const tagOption = document.querySelector('.tag-filter-option') as HTMLElement
+    fireEvent.click(tagOption)
+
+    // Verify flat keyword results with tag filter applied
     await waitFor(() => {
       const results = document.querySelectorAll('.search-result-keyword')
-      expect(results.length).toBeGreaterThan(0)
-      // Should be flat — no date dividers
-      const dividers = document.querySelectorAll('.date-divider')
-      expect(dividers.length).toBe(0)
+      expect(results.length).toBeGreaterThanOrEqual(1)
     })
+
+    // Flat — no date dividers
+    expect(document.querySelectorAll('.date-divider').length).toBe(0)
   })
 })

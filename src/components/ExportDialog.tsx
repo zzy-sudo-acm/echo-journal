@@ -6,17 +6,38 @@ import { XIcon, DownloadIcon } from './Icons'
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<ExportPreview | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => {
-    generateBackupData().then((data) => {
-      setPreview(previewBackup(data))
-      setLoading(false)
-    })
+    let cancelled = false
     document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
+
+    void generateBackupData()
+      .then((data) => {
+        if (!cancelled) {
+          setPreview(previewBackup(data))
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('无法读取本地数据，请稍后重试。')
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      document.body.style.overflow = ''
+    }
   }, [])
 
   const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    setExportError(null)
     try {
       const blob = await createExportZip()
       const filename = generateExportFilename()
@@ -47,11 +68,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       URL.revokeObjectURL(url)
       onClose()
     } catch (err) {
-      // User cancelled share or download failed — try download fallback
+      // User cancelled share — just close
       if (err instanceof DOMException && err.name === 'AbortError') {
         onClose()
         return
       }
+      // Try download fallback if share failed
       try {
         const blob = await createExportZip()
         const url = URL.createObjectURL(blob)
@@ -64,8 +86,10 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         URL.revokeObjectURL(url)
         onClose()
       } catch {
-        // Silent fail
+        setExportError('导出失败，请稍后重试。')
       }
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -74,13 +98,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 className="modal-title" style={{ margin: 0 }}>导出备份</h2>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }} disabled={exporting}>
             <XIcon />
           </button>
         </div>
 
         {loading ? (
           <p style={{ color: 'var(--text-secondary)' }}>正在准备备份数据…</p>
+        ) : error ? (
+          <p style={{ color: 'var(--danger)' }}>{error}</p>
         ) : preview ? (
           <>
             <div className="preview-card">
@@ -113,8 +139,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
               journal.md 只包含当前正常日记，方便长期阅读。
             </p>
 
-            <button className="btn btn-primary btn-block" onClick={handleExport}>
-              <DownloadIcon /> 导出备份
+            {exportError ? (
+              <p style={{ color: 'var(--danger)', fontSize: '0.8125rem', marginBottom: 12 }}>{exportError}</p>
+            ) : null}
+
+            <button className="btn btn-primary btn-block" onClick={handleExport} disabled={exporting}>
+              {exporting ? '正在导出…' : <><DownloadIcon /> 导出备份</>}
             </button>
           </>
         ) : (

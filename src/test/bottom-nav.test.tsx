@@ -17,35 +17,32 @@ describe('BottomNav', () => {
     return screen.getByText(label).closest('a')
   }
 
-  it('activates settings on /trash', () => {
+  it('activates settings on /trash with active class', () => {
     render(
       <MemoryRouter initialEntries={['/trash']}>
         <BottomNav />
       </MemoryRouter>,
     )
-
     const link = getLink('设置')!
     expect(link.className).toContain('active')
   })
 
-  it('activates settings on /review', () => {
+  it('activates settings on /review with active class', () => {
     render(
       <MemoryRouter initialEntries={['/review']}>
         <BottomNav />
       </MemoryRouter>,
     )
-
     const link = getLink('设置')!
     expect(link.className).toContain('active')
   })
 
-  it('activates settings on /settings', () => {
+  it('activates settings on /settings with active class', () => {
     render(
       <MemoryRouter initialEntries={['/settings']}>
         <BottomNav />
       </MemoryRouter>,
     )
-
     const link = getLink('设置')!
     expect(link.className).toContain('active')
   })
@@ -56,7 +53,6 @@ describe('BottomNav', () => {
         <BottomNav />
       </MemoryRouter>,
     )
-
     const link = getLink('此刻')!
     expect(link.className).not.toContain('active')
   })
@@ -67,7 +63,6 @@ describe('BottomNav', () => {
         <BottomNav />
       </MemoryRouter>,
     )
-
     const indicator = document.querySelector('.bottom-nav-indicator') as HTMLElement
     expect(indicator.style.transform).toContain('translate3d(300%, 0, 0)')
   })

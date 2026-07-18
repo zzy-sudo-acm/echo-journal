@@ -28,7 +28,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const undoInProgress = useRef(false)
+
   const handleUndo = (toast: ToastMessage) => {
+    if (undoInProgress.current) return
     const timer = timers.current.get(toast.id)
     if (timer) {
       clearTimeout(timer)
@@ -36,7 +39,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
     setToasts((prev) => prev.filter((t) => t.id !== toast.id))
     if (toast.undoAction) {
-      void toast.undoAction.action()
+      undoInProgress.current = true
+      Promise.resolve(toast.undoAction.action()).catch(() => {
+        // action handles its own user feedback; Toast only prevents unhandled rejection
+      }).finally(() => {
+        undoInProgress.current = false
+      })
     }
   }
 
