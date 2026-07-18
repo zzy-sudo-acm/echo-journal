@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import { settingsRepo } from '../db/repository'
+import { loadJournalFont } from '../utils/journalFonts'
 
 export type Theme = 'dark' | 'light'
 export type JournalFont = 'modern' | 'rounded' | 'fangsong' | 'display' | 'handwriting'
 
 const journalFonts = new Set<JournalFont>(['modern', 'rounded', 'fangsong', 'display', 'handwriting'])
+let journalFontRequest = 0
 
 function normalizeJournalFont(value: unknown): JournalFont {
   if (value === 'wenkai') return 'rounded'
@@ -17,14 +19,16 @@ function normalizeJournalFont(value: unknown): JournalFont {
 interface UIState {
   theme: Theme
   journalFont: JournalFont
+  loadingJournalFont: JournalFont | null
   setTheme: (theme: Theme) => Promise<void>
   setJournalFont: (font: JournalFont) => Promise<void>
   initAppearance: () => Promise<void>
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   theme: 'dark',
   journalFont: 'modern',
+  loadingJournalFont: null,
 
   setTheme: async (theme: Theme) => {
     set({ theme })
@@ -33,9 +37,24 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   setJournalFont: async (journalFont: JournalFont) => {
-    set({ journalFont })
-    document.documentElement.setAttribute('data-journal-font', journalFont)
-    await settingsRepo.set('journalFont', journalFont)
+    if (get().journalFont === journalFont && get().loadingJournalFont === null) return
+    const request = ++journalFontRequest
+
+    if (journalFont === 'modern') {
+      set({ journalFont, loadingJournalFont: null })
+      document.documentElement.setAttribute('data-journal-font', journalFont)
+      await settingsRepo.set('journalFont', journalFont)
+      return
+    }
+
+    set({ loadingJournalFont: journalFont })
+    const loaded = await loadJournalFont(journalFont)
+    if (request !== journalFontRequest) return
+
+    const appliedFont = loaded ? journalFont : 'modern'
+    set({ journalFont: appliedFont, loadingJournalFont: null })
+    document.documentElement.setAttribute('data-journal-font', appliedFont)
+    await settingsRepo.set('journalFont', appliedFont)
   },
 
   initAppearance: async () => {
@@ -43,10 +62,12 @@ export const useUIStore = create<UIState>((set) => ({
       settingsRepo.get<Theme>('theme', 'dark'),
       settingsRepo.get<unknown>('journalFont', 'modern'),
     ])
-    const journalFont = normalizeJournalFont(savedJournalFont)
-
-    set({ theme, journalFont })
+    const requestedFont = normalizeJournalFont(savedJournalFont)
     document.documentElement.setAttribute('data-theme', theme)
+    const loaded = await loadJournalFont(requestedFont)
+    const journalFont = loaded ? requestedFont : 'modern'
+
+    set({ theme, journalFont, loadingJournalFont: null })
     document.documentElement.setAttribute('data-journal-font', journalFont)
 
     if (journalFont !== savedJournalFont) {

@@ -12,6 +12,7 @@ import type { InternalSnapshot } from '../db/models'
 import { db } from '../db/database'
 import { getLocalDateString, toLocalDate } from '../utils/date'
 import type { JournalFont } from '../store/uiStore'
+import { loadJournalFontPreview } from '../utils/journalFonts'
 
 const fontOptions: Array<{ value: JournalFont; label: string }> = [
   { value: 'modern', label: '现代' },
@@ -22,7 +23,8 @@ const fontOptions: Array<{ value: JournalFont; label: string }> = [
 ]
 
 export function SettingsPage() {
-  const { journalFont, setJournalFont } = useUIStore()
+  const { journalFont, loadingJournalFont, setJournalFont } = useUIStore()
+  const [readyFontPreviews, setReadyFontPreviews] = useState<Set<JournalFont>>(() => new Set(['modern']))
   const [showExport, setShowExport] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -31,6 +33,23 @@ export function SettingsPage() {
   const [snapshots, setSnapshots] = useState<InternalSnapshot[]>([])
   const [showSnapshots, setShowSnapshots] = useState(false)
   const { showToast } = useToast()
+
+  useEffect(() => {
+    let cancelled = false
+    for (const option of fontOptions) {
+      if (option.value === 'modern') continue
+      void loadJournalFontPreview(option.value).then((loaded) => {
+        if (cancelled || !loaded) return
+        setReadyFontPreviews((ready) => {
+          if (ready.has(option.value)) return ready
+          const next = new Set(ready)
+          next.add(option.value)
+          return next
+        })
+      })
+    }
+    return () => { cancelled = true }
+  }, [])
 
   const loadStats = async () => setEntryCount(await entryRepo.getEntryCount())
   const loadSnapshots = async () => setSnapshots(await getSnapshots())
@@ -90,10 +109,12 @@ export function SettingsPage() {
                 <button
                   type="button"
                   key={option.value}
-                  className={`font-choice ${journalFont === option.value ? 'active' : ''}`}
+                  className={`font-choice ${journalFont === option.value ? 'active' : ''} ${readyFontPreviews.has(option.value) ? 'is-preview-ready' : ''}`}
                   data-font-preview={option.value}
                   role="radio"
                   aria-checked={journalFont === option.value}
+                  aria-busy={loadingJournalFont === option.value}
+                  disabled={loadingJournalFont === option.value}
                   onClick={() => void setJournalFont(option.value)}
                 >
                   <strong>{option.label}</strong>
