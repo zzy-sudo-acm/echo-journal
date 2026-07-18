@@ -152,7 +152,7 @@ export function SettingsPage() {
       <section className="settings-section settings-links">
         <Link className="settings-disclosure" to="/trash"><span className="settings-row-label"><TrashIcon /><span><strong>回收站</strong><small>{trashCount > 0 ? `${trashCount} 条` : '回收站是空的'}</small></span></span><ChevronRightIcon /></Link>
         <Link className="settings-disclosure" to="/review"><span className="settings-row-label"><ClockIcon /><span><strong>过去的今天</strong><small>查看往年同一天的记录</small></span></span><ChevronRightIcon /></Link>
-        <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v1.0.0</small></span></div>
+        <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v1.0.1</small></span></div>
       </section>
 
       <section className="settings-section danger-zone">

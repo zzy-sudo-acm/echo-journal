@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { settingsRepo } from '../db/repository'
 import { loadJournalFont } from '../utils/journalFonts'
+import { syncNativeSystemBars } from '../utils/nativeSystemBars'
 
 export type Theme = 'dark' | 'light'
 export type JournalFont = 'modern' | 'rounded' | 'fangsong' | 'display' | 'handwriting'
@@ -33,7 +34,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   setTheme: async (theme: Theme) => {
     set({ theme })
     document.documentElement.setAttribute('data-theme', theme)
-    await settingsRepo.set('theme', theme)
+    await Promise.all([
+      settingsRepo.set('theme', theme),
+      syncNativeSystemBars(theme),
+    ])
   },
 
   setJournalFont: async (journalFont: JournalFont) => {
@@ -64,6 +68,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     ])
     const requestedFont = normalizeJournalFont(savedJournalFont)
     document.documentElement.setAttribute('data-theme', theme)
+    await syncNativeSystemBars(theme)
     const loaded = await loadJournalFont(requestedFont)
     const journalFont = loaded ? requestedFont : 'modern'
 

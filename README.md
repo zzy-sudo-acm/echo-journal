@@ -74,6 +74,8 @@ cd android && .\gradlew.bat assembleDebug
 
 数据仅保存在当前设备，不同设备间需手动导出/导入。请定期导出备份。
 
+Android 版本不会使用系统自动云备份；卸载或清除应用数据前，请先在应用内导出 ZIP。
+
 备份文件包含 `backup.json`（完整恢复）和 `journal.md`（可阅读 Markdown）。
 
 ## 已知限制

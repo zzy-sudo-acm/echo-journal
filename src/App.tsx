@@ -11,6 +11,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { TrashPage } from './pages/TrashPage'
 import { createDailySnapshot, cleanupOldSnapshots } from './services/snapshot'
 import { useEntryStore } from './store/entryStore'
+import { Capacitor } from '@capacitor/core'
 
 function UpdatePrompt() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -159,7 +160,7 @@ function AppShell() {
         </Routes>
       </div>
       <BottomNav />
-      <UpdatePrompt />
+      {!Capacitor.isNativePlatform() ? <UpdatePrompt /> : null}
     </div>
   )
 }

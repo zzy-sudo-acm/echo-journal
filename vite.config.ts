@@ -46,7 +46,8 @@ export default defineConfig(({ mode }) => {
                 ],
               },
               workbox: {
-                globPatterns: ['**/*.{js,css,html,svg}'],
+                globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+                maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
                 runtimeCaching: [
                   {
                     urlPattern: ({ request }) => request.destination === 'font',
@@ -65,6 +66,10 @@ export default defineConfig(({ mode }) => {
           ]),
     ],
     base,
+    build: {
+      // Keep every font as a hashed asset instead of inlining small previews.
+      assetsInlineLimit: 0,
+    },
     resolve: {
       alias: {
         '@': '/src',

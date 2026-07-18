@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Echo Journal Rounded';
-  src: url('/echo-journal/fonts/journal-rounded.woff2') format('woff2');
+  src: url('./assets/fonts/journal-rounded.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'Echo Journal Display';
-  src: url('/echo-journal/fonts/journal-display.woff2') format('woff2');
+  src: url('./assets/fonts/journal-display.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'Echo Journal Fangsong';
-  src: url('/echo-journal/fonts/journal-fangsong.woff2') format('woff2');
+  src: url('./assets/fonts/journal-fangsong.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Echo Journal Handwriting';
-  src: url('/echo-journal/fonts/journal-handwriting.woff2?v=ma-shan-zheng-2.002') format('woff2');
+  src: url('./assets/fonts/journal-handwriting.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -32,7 +32,7 @@
 
 @font-face {
   font-family: 'Echo Preview Rounded';
-  src: url('/echo-journal/fonts/preview-rounded.woff2') format('woff2');
+  src: url('./assets/fonts/preview-rounded.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -40,7 +40,7 @@
 
 @font-face {
   font-family: 'Echo Preview Display';
-  src: url('/echo-journal/fonts/preview-display.woff2') format('woff2');
+  src: url('./assets/fonts/preview-display.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -48,7 +48,7 @@
 
 @font-face {
   font-family: 'Echo Preview Fangsong';
-  src: url('/echo-journal/fonts/preview-fangsong.woff2') format('woff2');
+  src: url('./assets/fonts/preview-fangsong.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -56,7 +56,7 @@
 
 @font-face {
   font-family: 'Echo Preview Handwriting';
-  src: url('/echo-journal/fonts/preview-handwriting.woff2?v=ma-shan-zheng-2.002') format('woff2');
+  src: url('./assets/fonts/preview-handwriting.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -122,10 +122,14 @@
   --radius: 12px;
   --radius-sm: 8px;
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --nav-height: 68px;
   --nav-bottom-gap: 10px;
   --header-height: 56px;
+  --header-total-height: calc(var(--header-height) + var(--safe-top));
   --content-width: 780px;
   --motion-fast: 170ms;
   --motion: 210ms;
@@ -313,10 +317,14 @@ h3 { font-size: 1rem; }
   top: 0;
   z-index: 40;
   display: flex;
-  min-height: var(--header-height);
+  min-height: var(--header-total-height);
   align-items: center;
   justify-content: space-between;
-  padding: 0 max(20px, env(safe-area-inset-left)) 0 max(20px, env(safe-area-inset-right));
+  padding:
+    var(--safe-top)
+    max(20px, var(--safe-right))
+    0
+    max(20px, var(--safe-left));
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   background: var(--header-bg);
   backdrop-filter: blur(16px);
@@ -396,7 +404,7 @@ h3 { font-size: 1rem; }
 
 .page {
   width: min(100%, calc(var(--content-width) + 40px));
-  min-height: calc(100dvh - var(--header-height));
+  min-height: calc(100dvh - var(--header-total-height));
   margin: 0 auto;
   padding: 28px 20px 48px;
 }
@@ -448,7 +456,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 
 .bottom-nav {
   position: fixed;
-  inset: auto max(14px, env(safe-area-inset-right)) calc(var(--nav-bottom-gap) + var(--safe-bottom)) max(14px, env(safe-area-inset-left));
+  inset: auto max(14px, var(--safe-right)) calc(var(--nav-bottom-gap) + var(--safe-bottom)) max(14px, var(--safe-left));
   z-index: 50;
   display: grid;
   overflow: hidden;
@@ -533,7 +541,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
   animation: timeline-intro-line-in 650ms 160ms ease-out both;
 }
 .timeline { position: relative; display: flex; flex-direction: column; gap: var(--day-card-gap); }
-.day-group { scroll-margin-top: calc(var(--header-height) + 10px); }
+.day-group { scroll-margin-top: calc(var(--header-total-height) + 10px); }
 .day-group + .day-group { margin-top: 0; }
 .timeline-day-card {
   position: relative;
@@ -564,7 +572,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .timeline-day-card.has-entries .timeline-day-composer { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--day-card-divider); }
 .date-divider {
   position: sticky;
-  top: var(--header-height);
+  top: var(--header-total-height);
   z-index: 8;
   display: flex;
   align-items: center;
@@ -602,7 +610,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .entry-tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; color: var(--accent); font-size: .75rem; }
 .entry-more { width: 18px; height: 18px; color: var(--text-tertiary); opacity: .34; }
 
-.entry-action-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px calc(16px + var(--safe-bottom) + var(--nav-bottom-gap) + var(--nav-height)); background: var(--overlay); animation: fade-in var(--motion-fast) ease both; }
+.entry-action-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: flex-end; justify-content: center; padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) calc(16px + var(--safe-bottom) + var(--nav-bottom-gap) + var(--nav-height)) max(16px, var(--safe-left)); background: var(--overlay); animation: fade-in var(--motion-fast) ease both; }
 .entry-action-sheet { width: min(100%, 520px); padding: 14px; border: 1px solid var(--input-divider); border-radius: 14px; background: var(--action-bg); box-shadow: var(--action-shadow); animation: sheet-up var(--motion) ease both; }
 .action-sheet-header { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding-left: 10px; color: var(--text-secondary); font-size: .78rem; }
 .action-sheet-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -671,7 +679,7 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .search-date-trigger::before { content: ''; position: absolute; left: -4px; width: 1px; height: 20px; background: var(--border-light); }
 .search-date-trigger.active { color: var(--accent); }
 .search-date-scrim { position: fixed; inset: 0; z-index: 140; width: 100%; height: 100%; background: color-mix(in srgb, var(--overlay) 72%, transparent); cursor: default; animation: fade-in var(--motion-fast) ease both; }
-.search-date-panel { position: fixed; inset: auto 0 0; z-index: 141; width: 100%; max-height: min(82dvh, 680px); overflow-y: auto; padding: 18px 20px calc(18px + var(--safe-bottom)); border-top: 1px solid var(--border); border-radius: 18px 18px 0 0; background: var(--action-bg); box-shadow: var(--action-shadow); animation: sheet-up var(--motion) ease both; }
+.search-date-panel { position: fixed; inset: auto 0 0; z-index: 141; width: 100%; max-height: min(82dvh, 680px); overflow-y: auto; padding: 18px max(20px, var(--safe-right)) calc(18px + var(--safe-bottom)) max(20px, var(--safe-left)); border-top: 1px solid var(--border); border-radius: 18px 18px 0 0; background: var(--action-bg); box-shadow: var(--action-shadow); animation: sheet-up var(--motion) ease both; }
 .search-date-header { display: flex; min-height: 44px; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
 .search-date-header h2 { font-size: 1.02rem; font-weight: 580; }
 .search-date-header p { margin-top: 3px; color: var(--text-tertiary); font-size: .72rem; }
@@ -765,8 +773,7 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
   text-align: left;
 }
 .font-choice strong { color: var(--text-primary); font-family: var(--font-sans); font-size: .78rem; font-weight: 600; }
-.font-choice span { min-width: 0; visibility: hidden; color: var(--text-secondary); font-family: var(--journal-preview-font); font-size: 1.0625rem; line-height: 1.6; opacity: 0; overflow-wrap: anywhere; transition: opacity var(--motion-fast); }
-.font-choice.is-preview-ready span { visibility: visible; opacity: 1; }
+.font-choice span { min-width: 0; color: var(--text-secondary); font-family: var(--journal-preview-font), var(--font-sans); font-size: 1.0625rem; line-height: 1.6; overflow-wrap: anywhere; }
 [data-font-preview='handwriting'] span { font-size: 1.415rem; line-height: 1.95; }
 .font-choice.active { border-color: color-mix(in srgb, var(--accent) 62%, var(--border)); background: var(--accent-bg); }
 .settings-disclosure { display: flex; width: 100%; min-height: 64px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); text-align: left; }
@@ -784,7 +791,7 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
 .danger-row { display: flex; width: 100%; min-height: 66px; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--danger-bg); color: var(--danger); text-align: left; }
 .danger-zone > p { margin: 8px 4px 0; color: var(--text-tertiary); font-size: .69rem; }
 
-.modal-overlay, .confirm-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; padding-top: env(safe-area-inset-top); background: var(--overlay); animation: fade-in var(--motion-fast) ease both; }
+.modal-overlay, .confirm-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; padding: var(--safe-top) var(--safe-right) 0 var(--safe-left); background: var(--overlay); animation: fade-in var(--motion-fast) ease both; }
 .modal { width: 100%; max-width: 620px; max-height: min(88dvh, 760px); overflow-y: auto; padding: 20px 20px calc(20px + var(--safe-bottom)); border: 1px solid var(--input-divider); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--action-bg); box-shadow: var(--editor-shadow); animation: sheet-up var(--motion) ease both; }
 .modal-header { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .modal-title { margin: 0; font-size: 1.08rem; }
@@ -794,7 +801,7 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
 .editor-content-field textarea { min-height: 190px; color: var(--text-primary); font-size: 1rem; line-height: var(--journal-line-height); }
 .modal-actions { position: sticky; bottom: calc(-20px - var(--safe-bottom)); display: flex; gap: 10px; margin-top: 22px; padding: 14px 0 calc(2px + var(--safe-bottom)); background: var(--action-bg); }
 .modal-actions .btn { flex: 1; }
-.confirm-overlay { z-index: 200; align-items: center; padding: 20px; }
+.confirm-overlay { z-index: 200; align-items: center; padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(20px, var(--safe-bottom)) max(20px, var(--safe-left)); }
 .confirm-box { width: min(100%, 360px); padding: 22px; border: 1px solid var(--input-divider); border-radius: 14px; background: var(--action-bg); box-shadow: var(--action-shadow); }
 .confirm-box p { margin-bottom: 20px; color: var(--text-primary); font-size: .9rem; line-height: 1.65; }
 .confirm-box .btn-group { display: flex; gap: 10px; }
@@ -901,14 +908,14 @@ input.input-error { border-color: var(--danger); }
 
 @media (min-width: 768px) {
   #root { padding-bottom: 0; }
-  .app-header { padding-inline: max(32px, calc((100vw - 1180px) / 2)); }
+  .app-header { padding-inline: max(32px, var(--safe-left), calc((100vw - 1180px) / 2)) max(32px, var(--safe-right), calc((100vw - 1180px) / 2)); }
   .route-enter-right, .route-enter-left { animation: desktop-route-enter 190ms cubic-bezier(.22, 1, .36, 1) both; }
   .desktop-app-brand { display: inline-flex; min-height: 44px; align-items: center; color: var(--text-primary); font-size: 1.04rem; font-weight: 550; letter-spacing: .035em; }
   .writing-capsule { display: none; }
   .desktop-header-nav { display: flex; align-items: center; gap: 9px; }
   .bottom-nav { display: none; }
   .page { padding: 52px 20px 80px; }
-  .date-divider { top: var(--header-height); }
+  .date-divider { top: var(--header-total-height); }
   .entry-row { grid-template-columns: 72px minmax(0, 1fr) 20px; gap: 20px; padding: 18px 0 25px; }
   .entry-content { font-size: 1.02rem; }
   .timeline-page { padding-top: 20px; padding-inline: 20px; }
@@ -918,8 +925,8 @@ input.input-error { border-color: var(--danger); }
   .quick-input.is-expanded { max-height: 480px; }
   .calendar-page { width: min(100%, 1120px); }
   .calendar-layout { grid-template-columns: minmax(320px, 380px) minmax(0, 1fr); gap: 64px; align-items: start; }
-  .calendar { position: sticky; top: calc(var(--header-height) + 30px); }
-  .calendar-entries .date-divider { top: var(--header-height); }
+  .calendar { position: sticky; top: calc(var(--header-total-height) + 30px); }
+  .calendar-entries .date-divider { top: var(--header-total-height); }
   .modal-overlay { align-items: center; padding: 24px; }
   .modal { max-height: min(86dvh, 760px); padding: 24px; border-bottom: 1px solid var(--border); border-radius: 16px; }
   .modal-actions { bottom: -24px; padding-bottom: 0; }

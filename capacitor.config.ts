@@ -8,6 +8,13 @@ const config: CapacitorConfig = {
     // Load bundled static files directly — no remote URL
     androidScheme: 'https',
   },
+  plugins: {
+    SystemBars: {
+      insetsHandling: 'css',
+      hidden: false,
+      style: 'DARK',
+    },
+  },
 }
 
 export default config

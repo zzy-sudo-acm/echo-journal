@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { createExportZip, generateExportFilename, generateBackupData, previewBackup } from '../services/backup'
 import type { ExportPreview } from '../db/models'
 import { XIcon, DownloadIcon } from './Icons'
+import { Capacitor } from '@capacitor/core'
+import { shareNativeExport } from '../services/nativeExport'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -25,10 +27,11 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [exportError, setExportError] = useState<string | null>(null)
 
   const exportingRef = useRef(false)
-  const mountedRef = useRef(true)
+  const mountedRef = useRef(false)
 
   // Init
   useEffect(() => {
+    mountedRef.current = true
     let cancelled = false
     document.body.style.overflow = 'hidden'
 
@@ -61,10 +64,17 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     setExportError(null)
 
     let blob: Blob | null = null
+    let filename = ''
 
     try {
       blob = await createExportZip()
-      const filename = generateExportFilename()
+      filename = generateExportFilename()
+
+      if (Capacitor.isNativePlatform()) {
+        await shareNativeExport(blob, filename)
+        onClose()
+        return
+      }
 
       // Try Web Share API first
       if (navigator.share && navigator.canShare) {
@@ -93,7 +103,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       // Share failed but blob exists — retry download with same blob
       if (blob) {
         try {
-          downloadBlob(blob, generateExportFilename())
+          downloadBlob(blob, filename)
           onClose()
         } catch {
           if (mountedRef.current) {

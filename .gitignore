@@ -25,6 +25,7 @@ dist-ssr
 
 # Android
 echo-journal-stable.apk
+echo-journal-stable-*.apk
 android/local.properties
 android/app/build/
 android/build/
