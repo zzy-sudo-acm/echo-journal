@@ -1,109 +1,116 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { QuickInput } from '../components/QuickInput'
 import { EntryCard } from '../components/EntryCard'
 import { EntryEditor } from '../components/EntryEditor'
-import { OnThisDay } from '../components/OnThisDay'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/ToastContext'
+import { getLocalDateString, toLocalDate } from '../utils/date'
 import type { Entry, CreateEntryInput } from '../db/models'
 
+function formatDateLabel(dateString: string) {
+  const date = new Date(`${dateString}T12:00:00`)
+  const today = new Date()
+  const todayString = getLocalDateString(today)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (dateString === todayString) return '今天'
+  if (dateString === getLocalDateString(yesterday)) return '昨天'
+
+  const label = date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+  return date.getFullYear() === today.getFullYear() ? label : `${date.getFullYear()} 年 · ${label}`
+}
+
 export function TodayPage() {
-  const { todayEntries, loadToday, createEntry, updateEntry, deleteEntry } = useEntryStore()
+  const { entries, loadEntries, updateEntry, deleteEntry } = useEntryStore()
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
-  const [showEditor, setShowEditor] = useState(false)
   const { showToast } = useToast()
+  const positioned = useRef(false)
+
+  const refreshTimeline = useCallback(async () => {
+    await loadEntries({ orderBy: 'createdAt', orderDir: 'asc' })
+  }, [loadEntries])
 
   useEffect(() => {
-    loadToday()
-  }, [loadToday])
+    void refreshTimeline()
+  }, [refreshTimeline])
 
-  const handleCreate = async (input: CreateEntryInput) => {
-    await createEntry(input)
-    showToast('日记已保存', 'success')
-  }
+  const groups = useMemo(() => {
+    const grouped = new Map<string, Entry[]>()
+    for (const entry of entries) {
+      const date = toLocalDate(entry.createdAt)
+      const list = grouped.get(date)
+      if (list) list.push(entry)
+      else grouped.set(date, [entry])
+    }
+    return [...grouped.entries()]
+  }, [entries])
+
+  useEffect(() => {
+    if (positioned.current || entries.length === 0) return
+    positioned.current = true
+    requestAnimationFrame(() => {
+      document.getElementById(`day-${getLocalDateString()}`)?.scrollIntoView({ block: 'start' })
+    })
+  }, [entries])
 
   const handleUpdate = async (input: CreateEntryInput) => {
-    if (editingEntry) {
-      await updateEntry(editingEntry.id, input)
-      showToast('日记已更新', 'success')
-    }
+    if (!editingEntry) return
+    await updateEntry(editingEntry.id, input)
+    await refreshTimeline()
+    showToast('日记已更新', 'success')
   }
 
   const handleDelete = async () => {
-    if (deletingEntry) {
-      await deleteEntry(deletingEntry.id)
-      showToast('日记已删除', 'success')
-      setDeletingEntry(null)
-    }
+    if (!deletingEntry) return
+    await deleteEntry(deletingEntry.id)
+    await refreshTimeline()
+    showToast('日记已删除', 'success')
+    setDeletingEntry(null)
   }
-
-  const handleEditClick = (entry: Entry) => {
-    setEditingEntry(entry)
-    setShowEditor(true)
-  }
-
-  const today = new Date()
-  const dateStr = today.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  })
 
   return (
-    <div className="page">
-      <h1 style={{ marginBottom: 4 }}>今天</h1>
-      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
-        {dateStr}
-      </p>
+    <main className="page timeline-page">
+      <div className="mobile-page-title">
+        <h1>时间流</h1>
+        <p>{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
+      </div>
 
-      <QuickInput />
+      <div className="timeline" aria-label="日记时间流">
+        {groups.length === 0 ? (
+          <section className="day-group" id={`day-${getLocalDateString()}`}>
+            <div className="date-divider"><span>今天</span></div>
+            <p className="timeline-empty">这里还很安静。写下此刻，时间流会从这里开始。</p>
+          </section>
+        ) : groups.map(([date, dayEntries]) => (
+          <section className="day-group" id={`day-${date}`} key={date}>
+            <div className="date-divider"><span>{formatDateLabel(date)}</span></div>
+            <div className="day-entries">
+              {dayEntries.map((entry) => (
+                <EntryCard
+                  key={entry.id}
+                  entry={entry}
+                  onEdit={setEditingEntry}
+                  onDelete={setDeletingEntry}
+                  onCopied={() => showToast('已复制到剪贴板', 'success')}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
 
-      {todayEntries.length === 0 ? (
-        <div className="empty-state">
-          <p>今天还没有记录</p>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-            在上方输入框中写点什么吧
-          </p>
-        </div>
-      ) : (
-        <div>
-          <div className="section-title">今日时间线</div>
-          {todayEntries.map((entry) => (
-            <EntryCard
-              key={entry.id}
-              entry={entry}
-              onEdit={handleEditClick}
-              onDelete={setDeletingEntry}
-            />
-          ))}
-        </div>
-      )}
+      <QuickInput onSaved={refreshTimeline} />
 
-      <OnThisDay onEntryClick={(entry) => {
-        setEditingEntry(entry)
-        setShowEditor(true)
-      }} />
+      {editingEntry ? (
+        <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} />
+      ) : null}
 
-      {showEditor && (
-        <EntryEditor
-          entry={editingEntry}
-          onSave={editingEntry ? handleUpdate : handleCreate}
-          onClose={() => { setShowEditor(false); setEditingEntry(null) }}
-        />
-      )}
-
-      {deletingEntry && (
-        <ConfirmDialog
-          message="确定要删除这条日记吗？此操作不可撤销。"
-          confirmLabel="删除"
-          danger
-          onConfirm={handleDelete}
-          onCancel={() => setDeletingEntry(null)}
-        />
-      )}
-    </div>
+      {deletingEntry ? (
+        <ConfirmDialog message="确定要删除这条日记吗？此操作不可撤销。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} />
+      ) : null}
+    </main>
   )
 }

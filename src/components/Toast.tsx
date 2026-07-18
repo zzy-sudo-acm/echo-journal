@@ -1,17 +1,12 @@
-import { useState, useCallback, createContext, useContext } from 'react'
+import { useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import { ToastContext } from './ToastContext'
 
 interface ToastMessage {
   id: number
   text: string
   type: 'success' | 'error' | 'info'
 }
-
-interface ToastContextType {
-  showToast: (text: string, type?: 'success' | 'error' | 'info') => void
-}
-
-const ToastContext = createContext<ToastContextType>({ showToast: () => {} })
 
 let nextId = 0
 
@@ -38,8 +33,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   )
-}
-
-export function useToast() {
-  return useContext(ToastContext)
 }
