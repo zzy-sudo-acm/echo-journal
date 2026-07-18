@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import '@testing-library/jest-dom/vitest'
 
 // Mock crypto.randomUUID
 if (!globalThis.crypto || !globalThis.crypto.randomUUID) {

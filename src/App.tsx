@@ -67,12 +67,16 @@ function RouteScrollManager() {
   return null
 }
 
-function MidnightChecker() {
+export function MidnightChecker() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
 
     const check = () => {
-      useEntryStore.getState().checkDateChange()
+      try {
+        useEntryStore.getState().checkDateChange()
+      } catch {
+        // Date check failure is non-critical
+      }
     }
 
     // Check on visibility change

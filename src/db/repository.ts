@@ -126,10 +126,12 @@ export const entryRepo = {
     await db.entries.delete(id)
   },
 
-  /** Permanently delete all soft-deleted entries in a single transaction */
+  /** Permanently delete all non-draft soft-deleted entries in a single transaction */
   async emptyTrash(): Promise<void> {
     await db.transaction('rw', db.entries, async () => {
-      await db.entries.filter((e) => Boolean(e.deletedAt)).delete()
+      await db.entries
+        .filter((e) => !e.isDraft && Boolean(e.deletedAt))
+        .delete()
     })
   },
 

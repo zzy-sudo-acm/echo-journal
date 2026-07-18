@@ -109,8 +109,10 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     const current = getLocalDateString()
     if (current !== get().todayDate) {
       set({ todayDate: current })
-      // Reload today's entries — fire-and-forget
-      void get().loadToday()
+      // Reload today's entries — fire-and-forget with error handling
+      get().loadToday().catch(() => {
+        // Date refresh failed silently; state already updated
+      })
       return true
     }
     return false

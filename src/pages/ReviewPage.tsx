@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { entryRepo } from '../db/repository'
 import { EntryCard } from '../components/EntryCard'
 import { EntryEditor } from '../components/EntryEditor'
@@ -12,6 +12,8 @@ export function ReviewPage() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const undoGuardRef = useRef(false)
   const { updateEntry, deleteEntry, restoreEntry } = useEntryStore()
   const { showToast } = useToast()
   const today = new Date()
@@ -45,8 +47,9 @@ export function ReviewPage() {
   }
 
   const handleDelete = async () => {
-    if (!deletingEntry) return
+    if (!deletingEntry || deleting) return
     const deletedId = deletingEntry.id
+    setDeleting(true)
     try {
       await deleteEntry(deletedId)
       setDeletingEntry(null)
@@ -54,12 +57,22 @@ export function ReviewPage() {
       showToast('已移入回收站', 'success', {
         label: '撤销',
         action: async () => {
-          await restoreEntry(deletedId)
-          await loadReview()
+          if (undoGuardRef.current) return
+          undoGuardRef.current = true
+          try {
+            await restoreEntry(deletedId)
+            await loadReview()
+          } catch {
+            showToast('恢复失败', 'error')
+          } finally {
+            undoGuardRef.current = false
+          }
         },
       })
     } catch {
       showToast('删除失败', 'error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -73,7 +86,7 @@ export function ReviewPage() {
         </Fragment>
       ))}
       {editingEntry ? <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
-      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} /> : null}
+      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger confirming={deleting} onConfirm={() => void handleDelete()} onCancel={() => { if (!deleting) setDeletingEntry(null) }} /> : null}
     </main>
   )
 }

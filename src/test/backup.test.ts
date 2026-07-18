@@ -470,3 +470,79 @@ describe('Export Filename', () => {
     expect(filename).toMatch(/^echo-journal-backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/)
   })
 })
+
+describe('ZIP Export Content', () => {
+  beforeEach(async () => {
+    await db.entries.clear()
+    await db.tags.clear()
+    await db.snapshots.clear()
+  })
+
+  it('backup.json contains all entries including trash, journal.md only contains active', async () => {
+    await entryRepo.create({ content: '正常日记', title: '正常的', tags: ['日常'] })
+    const deleted = await entryRepo.create({ content: '已删日记', title: '已删', tags: ['删除'] })
+    await entryRepo.delete(deleted.id)
+
+    const blob = await createExportZip()
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(blob)
+
+    // Read files from ZIP
+    const backupJsonStr = await zip.file('backup.json')!.async('string')
+    const journalMd = await zip.file('journal.md')!.async('string')
+    const manifestStr = await zip.file('manifest.json')!.async('string')
+
+    const backupJson = JSON.parse(backupJsonStr)
+    const manifest = JSON.parse(manifestStr)
+
+    // backup.json: both entries present
+    expect(backupJson.entries.length).toBe(2)
+    expect(backupJson.entries.some((e: any) => e.content === '正常日记')).toBe(true)
+    expect(backupJson.entries.some((e: any) => e.content === '已删日记')).toBe(true)
+
+    // Deleted entry preserves deletedAt
+    const deletedEntry = backupJson.entries.find((e: any) => e.content === '已删日记')
+    expect(deletedEntry.deletedAt).toBeTruthy()
+
+    // manifest.entryCount = total non-draft entries
+    expect(manifest.entryCount).toBe(2)
+
+    // journal.md: only active entries
+    expect(journalMd).toContain('正常日记')
+    expect(journalMd).not.toContain('已删日记')
+  })
+
+  it('round-trip import preserves trash state', async () => {
+    await entryRepo.create({ content: '活跃日记' })
+    const deleted = await entryRepo.create({ content: '回收站日记' })
+    await entryRepo.delete(deleted.id)
+
+    // Export
+    const blob = await createExportZip()
+
+    // Clear DB
+    await db.entries.clear()
+    await db.tags.clear()
+
+    // Import
+    const { parseImportFile, mergeImport } = await import('../services/backup')
+    const file = new File([blob], 'backup.zip', { type: 'application/zip' })
+    const parsed = await parseImportFile(file)
+
+    expect('result' in parsed).toBe(true)
+    if ('result' in parsed) {
+      await mergeImport(parsed.result.data)
+
+      // Active entries visible
+      const active = await entryRepo.list()
+      expect(active.length).toBe(1)
+      expect(active[0].content).toBe('活跃日记')
+
+      // Trash entries visible in trash
+      const trash = await entryRepo.listTrash()
+      expect(trash.length).toBe(1)
+      expect(trash[0].content).toBe('回收站日记')
+      expect(trash[0].deletedAt).toBeTruthy()
+    }
+  })
+})

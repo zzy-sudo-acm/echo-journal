@@ -702,6 +702,10 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .search-hint { padding: 40px 12px; color: var(--text-secondary); font-size: .85rem; line-height: 1.8; text-align: center; }
 .search-result { display: grid; width: 100%; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; padding: 14px 0 20px; border-bottom: 1px solid var(--border-light); text-align: left; }
 .search-result > time { padding-top: 3px; color: var(--text-tertiary); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.search-result-keyword { grid-template-columns: 82px minmax(0, 1fr); }
+.search-result-keyword > time { display: flex; flex-direction: column; gap: 2px; }
+.search-result-date { white-space: nowrap; }
+.search-result-time { white-space: nowrap; }
 .search-result-body { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--text-primary); font-size: .91rem; line-height: 1.72; }
 .search-result-body > strong, .search-result-body > span { font-family: var(--journal-font); line-height: var(--journal-line-height); }
 .search-result-body strong { font-weight: 600; }

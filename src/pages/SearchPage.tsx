@@ -256,11 +256,10 @@ export function SearchPage() {
           </p>
         ) : null}
         {!searching && hasKeyword ? sortedResults.map((result) => (
-          <button type="button" className="search-result" key={result.entry.id} onClick={() => setViewingEntry(result.entry)}>
+          <button type="button" className="search-result search-result-keyword" key={result.entry.id} onClick={() => setViewingEntry(result.entry)}>
             <time>
-              {new Date(result.entry.createdAt).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
-              {' '}
-              {new Date(result.entry.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+              <span className="search-result-date">{new Date(result.entry.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}</span>
+              <span className="search-result-time">{new Date(result.entry.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
             </time>
             <span className="search-result-body">
               {result.entry.title ? <strong>{highlight(result.entry.title, keyword)}</strong> : null}

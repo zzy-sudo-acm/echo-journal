@@ -85,9 +85,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           <>
             <div className="preview-card">
               <div className="preview-row">
-                <span className="preview-label">日记数量</span>
-                <span>{preview.entryCount} 条</span>
+                <span className="preview-label">正常日记</span>
+                <span>{preview.activeEntryCount} 条</span>
               </div>
+              {preview.trashEntryCount > 0 ? (
+                <div className="preview-row">
+                  <span className="preview-label">回收站</span>
+                  <span>{preview.trashEntryCount} 条</span>
+                </div>
+              ) : null}
               <div className="preview-row">
                 <span className="preview-label">标签数量</span>
                 <span>{preview.tagCount} 个</span>
@@ -103,8 +109,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             </div>
 
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
-              备份文件包含完整恢复数据（backup.json）和可阅读的 Markdown 日记（journal.md）。
-              即使未来项目停止维护，你仍然可以直接打开 journal.md 阅读所有日记。
+              backup.json 包含完整恢复数据，包括回收站中的记录；
+              journal.md 只包含当前正常日记，方便长期阅读。
             </p>
 
             <button className="btn btn-primary btn-block" onClick={handleExport}>

@@ -9,8 +9,12 @@ const navItems = [
   { to: '/settings', icon: SettingsIcon, label: '设置', motion: 'settings' },
 ]
 
+function isSettingsRoute(pathname: string) {
+  return pathname === '/settings' || pathname === '/review' || pathname === '/trash'
+}
+
 function getActiveIndex(pathname: string) {
-  if (pathname === '/review' || pathname === '/trash') return 3
+  if (isSettingsRoute(pathname)) return 3
   const index = navItems.findIndex((item) => item.to === pathname)
   return index >= 0 ? index : 0
 }
@@ -31,6 +35,12 @@ export function BottomNav() {
         <span className="bottom-nav-indicator-surface" key={activeIndex} />
       </span>
       {navItems.map(({ to, icon: Icon, label, motion }) => {
+        const isActive = to === '/'
+          ? pathname === '/'
+          : to === '/settings'
+            ? isSettingsRoute(pathname)
+            : pathname === to
+
         const feedbackActive = iconFeedback?.path === to
 
         return (
@@ -38,6 +48,8 @@ export function BottomNav() {
             key={to}
             to={to}
             end={to === '/'}
+            className={() => isActive ? 'active' : ''}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => {
               if (pathname === to) return
               feedbackSequence.current += 1

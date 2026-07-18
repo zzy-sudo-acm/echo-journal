@@ -18,7 +18,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div className="confirm-overlay" onClick={(event) => { event.stopPropagation(); onCancel() }}>
+    <div className="confirm-overlay" onClick={(event) => { event.stopPropagation(); if (!confirming) onCancel() }}>
       <div className="confirm-box" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <p>{message}</p>
         <div className="btn-group">
