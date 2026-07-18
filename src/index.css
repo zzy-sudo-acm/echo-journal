@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Echo Journal Handwriting';
-  src: url('/echo-journal/fonts/journal-handwriting.woff2') format('woff2');
+  src: url('/echo-journal/fonts/journal-handwriting.woff2?v=ma-shan-zheng-2.002') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;
@@ -56,7 +56,7 @@
 
 @font-face {
   font-family: 'Echo Preview Handwriting';
-  src: url('/echo-journal/fonts/preview-handwriting.woff2') format('woff2');
+  src: url('/echo-journal/fonts/preview-handwriting.woff2?v=ma-shan-zheng-2.002') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400;

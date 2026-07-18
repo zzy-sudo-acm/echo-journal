@@ -44,7 +44,7 @@ export default defineConfig({
             urlPattern: ({ request }) => request.destination === 'font',
             handler: 'CacheFirst',
             options: {
-              cacheName: 'echo-journal-fonts',
+              cacheName: 'echo-journal-fonts-v2',
               expiration: {
                 maxEntries: 12,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
