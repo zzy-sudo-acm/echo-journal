@@ -41,7 +41,7 @@ function UpdatePrompt() {
       transform: 'translateX(-50%)',
       zIndex: 500,
       background: 'var(--accent)',
-      color: '#11110F',
+      color: 'var(--on-accent)',
       padding: '10px 20px',
       borderRadius: 'var(--radius)',
       fontSize: '0.875rem',
@@ -87,7 +87,7 @@ function AppShell() {
   }, [])
 
   return (
-    <>
+    <div className="app-shell">
       <RouteScrollManager />
       <AppHeader />
       <Routes>
@@ -99,7 +99,7 @@ function AppShell() {
       </Routes>
       <BottomNav />
       <UpdatePrompt />
-    </>
+    </div>
   )
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../db/database'
 import { entryRepo } from '../db/repository'
 import { searchEntries } from '../services/search'
-import { getLocalDateString } from '../utils/date'
+import { getLocalDateString, parseLocalDateString } from '../utils/date'
 import type { Entry } from '../db/models'
 
 function localIso(year: number, month: number, day: number, hour = 12, minute = 0): string {
@@ -79,6 +79,13 @@ describe('Search date filters', () => {
     })
 
     expect(results.map((result) => result.entry.content)).toEqual(['本地午夜后的记录'])
+  })
+
+  it('parses a calendar date as the same local day', () => {
+    const parsed = parseLocalDateString('2026-07-18')
+
+    expect(getLocalDateString(parsed)).toBe('2026-07-18')
+    expect(parsed.getHours()).toBe(12)
   })
 
   it('searches legacy entries whose optional title or tags are missing', async () => {

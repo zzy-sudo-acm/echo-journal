@@ -5,9 +5,10 @@ interface TagInputProps {
   tags: string[]
   onChange: (tags: string[]) => void
   placeholder?: string
+  autoFocus?: boolean
 }
 
-export function TagInput({ tags, onChange, placeholder = '添加标签' }: TagInputProps) {
+export function TagInput({ tags, onChange, placeholder = '添加标签', autoFocus = false }: TagInputProps) {
   const [input, setInput] = useState('')
 
   const addTag = () => {
@@ -30,7 +31,7 @@ export function TagInput({ tags, onChange, placeholder = '添加标签' }: TagIn
       {tags.map((tag) => (
         <span key={tag} className="editable-tag">#{tag}<button type="button" aria-label={`移除标签 ${tag}`} onClick={() => onChange(tags.filter((item) => item !== tag))}><XIcon /></button></span>
       ))}
-      <input type="text" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} onBlur={addTag} placeholder={tags.length ? '' : placeholder} aria-label={placeholder} />
+      <input type="text" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} onBlur={addTag} placeholder={tags.length ? '' : placeholder} aria-label={placeholder} autoFocus={autoFocus} />
     </div>
   )
 }

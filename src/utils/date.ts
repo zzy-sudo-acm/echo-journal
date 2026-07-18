@@ -17,6 +17,20 @@ export function getLocalDateString(d: Date = new Date()): string {
   return `${y}-${m}-${day}`
 }
 
+/** Parse YYYY-MM-DD as a stable LOCAL calendar date without UTC coercion. */
+export function parseLocalDateString(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day, 12)
+}
+
+/** Format a YYYY-MM-DD value without relying on the Date string parser. */
+export function formatLocalDateString(
+  value: string,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  return parseLocalDateString(value).toLocaleDateString('zh-CN', options)
+}
+
 /** Return HH:mm in local timezone. */
 export function getLocalTimeString(d: Date = new Date()): string {
   const h = String(d.getHours()).padStart(2, '0')

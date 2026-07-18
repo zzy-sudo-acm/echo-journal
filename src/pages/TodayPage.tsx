@@ -5,11 +5,11 @@ import { EntryCard } from '../components/EntryCard'
 import { EntryEditor } from '../components/EntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
-import { getLocalDateString, toLocalDate } from '../utils/date'
+import { formatLocalDateString, getLocalDateString, parseLocalDateString, toLocalDate } from '../utils/date'
 import type { Entry, CreateEntryInput } from '../db/models'
 
 function formatDateLabel(dateString: string) {
-  const date = new Date(`${dateString}T12:00:00`)
+  const date = parseLocalDateString(dateString)
   const today = new Date()
   const todayString = getLocalDateString(today)
   const yesterday = new Date(today)
@@ -18,7 +18,7 @@ function formatDateLabel(dateString: string) {
   if (dateString === todayString) return '今天'
   if (dateString === getLocalDateString(yesterday)) return '昨天'
 
-  const label = date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+  const label = formatLocalDateString(dateString, { month: 'long', day: 'numeric', weekday: 'long' })
   return date.getFullYear() === today.getFullYear() ? label : `${date.getFullYear()} 年 · ${label}`
 }
 

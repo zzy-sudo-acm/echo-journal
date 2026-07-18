@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { TagInput } from './TagInput'
-import { CheckIcon, ClockIcon, PlusIcon, XIcon } from './Icons'
+import { TagIcon } from './Icons'
 import { draftRepo } from '../db/repository'
 
 interface QuickInputProps {
@@ -10,28 +10,23 @@ interface QuickInputProps {
 
 type DraftStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-function toDateTimeLocalValue(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
 export function QuickInput({ onSaved }: QuickInputProps) {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [createdAt, setCreatedAt] = useState(() => toDateTimeLocalValue(new Date()))
   const [expanded, setExpanded] = useState(false)
+  const [tagEditorOpen, setTagEditorOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle')
+  const [draftLoaded, setDraftLoaded] = useState(false)
   const { createEntry, saveDraft, clearDraft } = useEntryStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const draftLoaded = useRef(false)
+  const editedSinceMount = useRef(false)
 
   useEffect(() => {
     let cancelled = false
     draftRepo.get().then((draft) => {
       if (cancelled) return
-      draftLoaded.current = true
-      if (draft) {
+      if (draft && !editedSinceMount.current) {
         setContent(draft.content)
         setTags(draft.tags)
         if (draft.content || draft.tags.length > 0) {
@@ -39,12 +34,13 @@ export function QuickInput({ onSaved }: QuickInputProps) {
           setDraftStatus('saved')
         }
       }
+      setDraftLoaded(true)
     })
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (!draftLoaded.current) return
+    if (!draftLoaded) return
     let verifyTimer: ReturnType<typeof setTimeout> | undefined
     const timer = setTimeout(async () => {
       if (!content.trim() && tags.length === 0) {
@@ -70,20 +66,19 @@ export function QuickInput({ onSaved }: QuickInputProps) {
       clearTimeout(timer)
       if (verifyTimer) clearTimeout(verifyTimer)
     }
-  }, [content, tags, saveDraft, clearDraft])
+  }, [content, tags, draftLoaded, saveDraft, clearDraft])
 
   const handleSave = async () => {
-    if (!content.trim()) return
+    if (saving || !content.trim()) return
     setSaving(true)
     try {
       await createEntry({
         content: content.trim(),
         tags,
-        createdAt: new Date(createdAt).toISOString(),
       })
       setContent('')
       setTags([])
-      setCreatedAt(toDateTimeLocalValue(new Date()))
+      setTagEditorOpen(false)
       setExpanded(false)
       setDraftStatus('idle')
       await onSaved?.()
@@ -100,6 +95,7 @@ export function QuickInput({ onSaved }: QuickInputProps) {
           value={content}
           rows={expanded ? 4 : 1}
           onChange={(event) => {
+            editedSinceMount.current = true
             setContent(event.target.value)
             setDraftStatus(event.target.value ? 'saving' : 'idle')
           }}
@@ -112,26 +108,46 @@ export function QuickInput({ onSaved }: QuickInputProps) {
           }}
           placeholder="写下此刻…"
         />
-        {expanded ? <button type="button" className="icon-button composer-close" aria-label="收起记录区" onClick={() => setExpanded(false)}><XIcon /></button> : null}
       </div>
 
       {expanded ? (
         <div className="quick-input-details">
-          <TagInput tags={tags} onChange={setTags} placeholder="添加标签" />
+          {tagEditorOpen ? (
+            <div className="composer-tag-editor">
+              <TagInput
+                tags={tags}
+                onChange={(nextTags) => {
+                  editedSinceMount.current = true
+                  setTags(nextTags)
+                }}
+                placeholder="输入标签，按回车添加"
+                autoFocus
+              />
+            </div>
+          ) : null}
           <div className="quick-input-footer">
-            <label className="composer-time">
-              <ClockIcon />
-              <span className="sr-only">记录时间</span>
-              <input type="datetime-local" value={createdAt} onInput={(event) => setCreatedAt(event.currentTarget.value)} />
-            </label>
-            <span className={`draft-indicator status-${draftStatus}`} aria-live="polite">
-              {draftStatus === 'saving' ? '正在保存草稿…' : null}
-              {draftStatus === 'saved' ? <><CheckIcon />草稿已保存</> : null}
+            <div className="composer-tags">
+              <button
+                type="button"
+                className={`composer-tag-trigger ${tagEditorOpen ? 'active' : ''}`}
+                aria-label={tags.length ? '编辑标签' : '添加标签'}
+                aria-expanded={tagEditorOpen}
+                onClick={() => setTagEditorOpen((open) => !open)}
+              >
+                <TagIcon />
+              </button>
+              {!tagEditorOpen ? tags.map((tag) => <span key={tag}>#{tag}</span>) : null}
+            </div>
+            <span className={`sr-only status-${draftStatus}`} aria-live="polite">
+              {draftStatus === 'saving' ? '正在保存草稿' : null}
+              {draftStatus === 'saved' ? '草稿已保存' : null}
               {draftStatus === 'error' ? '草稿保存失败' : null}
             </span>
-            <button type="button" className="btn btn-primary composer-save" onClick={() => void handleSave()} disabled={saving || !content.trim()}>
-              <PlusIcon />{saving ? '保存中…' : '记下'}
-            </button>
+            {content.trim() ? (
+              <button type="button" className="composer-save" onClick={() => void handleSave()} disabled={saving} aria-busy={saving}>
+                记下
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

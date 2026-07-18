@@ -1,6 +1,6 @@
 import { entryRepo } from '../db/repository'
 import type { Entry } from '../db/models'
-import { toLocalDate } from '../utils/date'
+import { formatLocalDateString, toLocalDate } from '../utils/date'
 
 export type SearchDateFilter =
   | { mode: 'all' }
@@ -11,7 +11,7 @@ export type SearchDateFilter =
 export const NO_DATE_FILTER: SearchDateFilter = { mode: 'all' }
 
 function formatLocalDate(date: string, includeYear = true): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString('zh-CN', {
+  return formatLocalDateString(date, {
     year: includeYear ? 'numeric' : undefined,
     month: 'long',
     day: 'numeric',
