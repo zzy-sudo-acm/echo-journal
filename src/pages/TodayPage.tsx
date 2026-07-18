@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { QuickInput } from '../components/QuickInput'
+import { FOCUS_QUICK_INPUT_EVENT } from '../utils/events'
 import { TimelineIntro } from '../components/TimelineIntro'
 import { TimelineDayGroup, type TimelineDayVariant } from '../components/TimelineDayGroup'
 import { EntryEditor } from '../components/EntryEditor'
@@ -29,6 +30,7 @@ export function TodayPage() {
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
   const { showToast } = useToast()
   const positioned = useRef(false)
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0)
 
   const refreshTimeline = useCallback(async () => {
     await loadEntries({ orderBy: 'createdAt', orderDir: 'asc' })
@@ -58,6 +60,20 @@ export function TodayPage() {
 
     return [[today, todayEntries] as const, ...earlierGroups]
   }, [entries, today])
+
+  useEffect(() => {
+    const focusComposer = () => {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      document.getElementById(`day-${today}`)?.scrollIntoView({
+        behavior: reducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      })
+      requestAnimationFrame(() => setComposerFocusRequest((request) => request + 1))
+    }
+
+    window.addEventListener(FOCUS_QUICK_INPUT_EVENT, focusComposer)
+    return () => window.removeEventListener(FOCUS_QUICK_INPUT_EVENT, focusComposer)
+  }, [today])
 
   useEffect(() => {
     if (positioned.current || entries.length === 0) return
@@ -105,7 +121,7 @@ export function TodayPage() {
               onDelete={setDeletingEntry}
               onCopied={() => showToast('已复制到剪贴板', 'success')}
             >
-              {variant === 'today' ? <QuickInput onSaved={refreshTimeline} /> : null}
+              {variant === 'today' ? <QuickInput onSaved={refreshTimeline} focusRequest={composerFocusRequest} /> : null}
             </TimelineDayGroup>
           )
         })}

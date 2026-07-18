@@ -6,11 +6,12 @@ import { draftRepo } from '../db/repository'
 
 interface QuickInputProps {
   onSaved?: () => void | Promise<void>
+  focusRequest?: number
 }
 
 type DraftStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-export function QuickInput({ onSaved }: QuickInputProps) {
+export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [expanded, setExpanded] = useState(false)
@@ -39,6 +40,11 @@ export function QuickInput({ onSaved }: QuickInputProps) {
     })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (focusRequest === 0) return
+    textareaRef.current?.focus({ preventScroll: true })
+  }, [focusRequest])
 
   useEffect(() => {
     if (!draftLoaded) return

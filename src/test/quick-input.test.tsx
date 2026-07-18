@@ -60,4 +60,14 @@ describe('QuickInput', () => {
     fireEvent.blur(restored)
     expect(restored.getAttribute('placeholder')).toBe('这里还很安静')
   })
+
+  it('focuses the composer when its focus request changes', () => {
+    const { rerender } = render(<QuickInput focusRequest={0} />)
+    const textarea = screen.getByPlaceholderText('这里还很安静')
+
+    rerender(<QuickInput focusRequest={1} />)
+
+    expect(document.activeElement).toBe(textarea)
+    expect(textarea.getAttribute('placeholder')).toBe('写下此刻…')
+  })
 })
