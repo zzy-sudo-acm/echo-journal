@@ -1,44 +1,46 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { TagInput } from './TagInput'
 import { PlusIcon } from './Icons'
+import { draftRepo } from '../db/repository'
 
 export function QuickInput() {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { createEntry, saveDraft, draft, loadDraft } = useEntryStore()
+  const { createEntry, saveDraft, clearDraft } = useEntryStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const loadedRef = useRef(false)
+  const draftLoaded = useRef(false)
 
+  // Load draft on mount (component remount = app reopened)
   useEffect(() => {
-    if (!loadedRef.current) {
-      loadedRef.current = true
-      loadDraft()
-    }
-  }, [loadDraft])
-
-  useEffect(() => {
-    if (draft && !loadedRef.current) {
-      setContent(draft.content)
-      setTags(draft.tags)
-    }
-  }, [draft])
-
-  const autoSave = useCallback(
-    (text: string, currentTags: string[]) => {
-      if (text.trim()) {
-        saveDraft({ content: text, title: '', tags: currentTags })
+    let cancelled = false
+    draftRepo.get().then((draft) => {
+      if (cancelled) return
+      if (draft && !draftLoaded.current) {
+        draftLoaded.current = true
+        setContent(draft.content)
+        setTags(draft.tags)
+        if (draft.content) setExpanded(true)
       }
-    },
-    [saveDraft],
-  )
+    })
+    return () => { cancelled = true }
+  }, [])
 
+  // Auto-save draft on content/tag changes (debounced)
   useEffect(() => {
-    const timer = setTimeout(() => autoSave(content, tags), 500)
+    if (!draftLoaded.current) return // Don't overwrite before initial load
+    const timer = setTimeout(() => {
+      if (content.trim()) {
+        saveDraft({ content, title: '', tags })
+      } else if (tags.length === 0) {
+        // Content and tags both empty — no meaningful draft
+        clearDraft()
+      }
+    }, 500)
     return () => clearTimeout(timer)
-  }, [content, tags, autoSave])
+  }, [content, tags, saveDraft, clearDraft])
 
   const handleSave = async () => {
     if (!content.trim()) return
@@ -48,13 +50,13 @@ export function QuickInput() {
       setContent('')
       setTags([])
       setExpanded(false)
+      draftLoaded.current = false // Allow new draft after save
     } finally {
       setSaving(false)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Ctrl+Enter or Cmd+Enter to save
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault()
       handleSave()

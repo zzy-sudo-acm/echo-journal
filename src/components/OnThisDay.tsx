@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { ClockIcon } from './Icons'
 import type { Entry } from '../db/models'
+import { getLocalDateString, toLocalDate } from '../utils/date'
 
 interface OnThisDayProps {
   onEntryClick: (entry: Entry) => void
@@ -18,9 +19,9 @@ export function OnThisDay({ onEntryClick }: OnThisDayProps) {
     loadOnThisDay(month, day)
   }, [loadOnThisDay, month, day])
 
-  // Filter out today's entries
-  const todayStr = today.toISOString().slice(0, 10)
-  const pastEntries = onThisDayEntries.filter((e) => !e.createdAt.startsWith(todayStr))
+  // Filter out today's entries using LOCAL date
+  const todayStr = getLocalDateString()
+  const pastEntries = onThisDayEntries.filter((e) => toLocalDate(e.createdAt) !== todayStr)
 
   if (pastEntries.length === 0) return null
 

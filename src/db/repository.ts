@@ -1,6 +1,7 @@
 import { db } from './database'
 import type { Entry, CreateEntryInput, UpdateEntryInput, EntryQuery, TagInfo } from './models'
 import { v4 as uuidv4 } from './uuid'
+import { toLocalDate } from '../utils/date'
 
 function generateId(): string {
   return uuidv4()
@@ -8,6 +9,40 @@ function generateId(): string {
 
 function nowISO(): string {
   return new Date().toISOString()
+}
+
+/**
+ * Check if an entry's createdAt falls on a specific LOCAL date.
+ * createdAt is stored as ISO 8601 (UTC). We must parse it and compare
+ * LOCAL date components, NOT slice the ISO string directly.
+ */
+function entryMatchesLocalDate(entry: Entry, localDate: string): boolean {
+  return toLocalDate(entry.createdAt) === localDate
+}
+
+/**
+ * Check if an entry's createdAt is in a specific LOCAL year/month.
+ */
+function entryMatchesLocalYearMonth(entry: Entry, year: number, month: number): boolean {
+  const d = new Date(entry.createdAt)
+  return d.getFullYear() === year && d.getMonth() === month
+}
+
+/**
+ * Get LOCAL date string (YYYY-MM-DD) for an entry's createdAt.
+ */
+function entryLocalDate(entry: Entry): string {
+  return toLocalDate(entry.createdAt)
+}
+
+/**
+ * Get LOCAL month+day (MM-DD) for an entry's createdAt.
+ */
+function entryLocalMonthDay(entry: Entry): string {
+  const d = new Date(entry.createdAt)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}-${dd}`
 }
 
 export const entryRepo = {
@@ -60,31 +95,38 @@ export const entryRepo = {
   },
 
   async list(query: EntryQuery = {}): Promise<Entry[]> {
-    let collection = db.entries.toCollection()
+    // Dexie doesn't support complex local-date filtering at the DB level,
+    // so we apply filters post-query. For the expected data volume (< 10k entries),
+    // this is fine and avoids the UTC date bug.
 
+    let entries = await db.entries.toArray()
+
+    // Filter drafts
     if (query.isDraft !== undefined) {
-      collection = collection.filter((e) => e.isDraft === query.isDraft)
+      entries = entries.filter((e) => e.isDraft === query.isDraft)
     } else {
-      // Default: exclude drafts
-      collection = collection.filter((e) => !e.isDraft)
+      entries = entries.filter((e) => !e.isDraft)
     }
 
+    // Filter by LOCAL date
     if (query.date) {
-      collection = collection.filter((e) => e.createdAt.startsWith(query.date!))
+      entries = entries.filter((e) => entryMatchesLocalDate(e, query.date!))
     }
 
+    // Filter by LOCAL year/month
     if (query.year !== undefined && query.month !== undefined) {
-      const prefix = `${query.year}-${String(query.month + 1).padStart(2, '0')}`
-      collection = collection.filter((e) => e.createdAt.startsWith(prefix))
+      entries = entries.filter((e) => entryMatchesLocalYearMonth(e, query.year!, query.month!))
     }
 
+    // Filter by tag
     if (query.tag) {
-      collection = collection.filter((e) => e.tags.includes(query.tag!))
+      entries = entries.filter((e) => e.tags.includes(query.tag!))
     }
 
+    // Filter by keyword
     if (query.keyword) {
       const kw = query.keyword.toLowerCase()
-      collection = collection.filter(
+      entries = entries.filter(
         (e) =>
           e.content.toLowerCase().includes(kw) ||
           e.title.toLowerCase().includes(kw) ||
@@ -92,12 +134,10 @@ export const entryRepo = {
       )
     }
 
-    const results = await collection.toArray()
-
     // Sort
     const orderBy = query.orderBy || 'createdAt'
     const orderDir = query.orderDir || 'desc'
-    results.sort((a, b) => {
+    entries.sort((a, b) => {
       const va = a[orderBy]
       const vb = b[orderBy]
       if (va < vb) return orderDir === 'asc' ? -1 : 1
@@ -106,19 +146,20 @@ export const entryRepo = {
     })
 
     if (query.offset) {
-      return results.slice(query.offset)
+      return entries.slice(query.offset)
     }
     if (query.limit) {
-      return results.slice(0, query.limit)
+      return entries.slice(0, query.limit)
     }
-    return results
+    return entries
   },
 
   async getDatesWithEntries(): Promise<string[]> {
     const entries = await db.entries.filter((e) => !e.isDraft).toArray()
+    // Use LOCAL dates
     const dates = new Set<string>()
     for (const e of entries) {
-      dates.add(e.createdAt.slice(0, 10))
+      dates.add(entryLocalDate(e))
     }
     return Array.from(dates).sort()
   },
@@ -141,15 +182,11 @@ export const entryRepo = {
   },
 
   async getOnThisDay(month: number, day: number): Promise<Entry[]> {
-    const mm = String(month + 1).padStart(2, '0')
-    const dd = String(day).padStart(2, '0')
+    const targetMmdd = `${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
     const entries = await db.entries.filter((e) => !e.isDraft).toArray()
     return entries
-      .filter((e) => {
-        const datePart = e.createdAt.slice(5, 10) // MM-DD
-        return datePart === `${mm}-${dd}`
-      })
+      .filter((e) => entryLocalMonthDay(e) === targetMmdd)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
 }

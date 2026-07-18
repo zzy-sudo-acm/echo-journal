@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { entryRepo, draftRepo } from '../db/repository'
 import type { Entry, CreateEntryInput, UpdateEntryInput, EntryQuery } from '../db/models'
+import { getLocalDateString } from '../utils/date'
 
 interface EntryState {
   entries: Entry[]
@@ -30,7 +31,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   autoSaveTimer: null,
 
   loadToday: async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = getLocalDateString()
     const entries = await entryRepo.list({
       date: today,
       isDraft: false,

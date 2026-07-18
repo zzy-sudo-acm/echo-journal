@@ -15,6 +15,7 @@ export function SettingsPage() {
   const [showExport, setShowExport] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [restoreSnapshotId, setRestoreSnapshotId] = useState<string | null>(null)
   const [entryCount, setEntryCount] = useState(0)
   const [tagCount, setTagCount] = useState(0)
   const [snapshots, setSnapshots] = useState<InternalSnapshot[]>([])
@@ -175,7 +176,7 @@ export function SettingsPage() {
                     <button className="btn btn-sm btn-ghost" onClick={() => handlePinSnapshot(snap.id)}>
                       <PinIcon />
                     </button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => handleRestoreSnapshot(snap.id)}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setRestoreSnapshotId(snap.id)}>
                       恢复
                     </button>
                     <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteSnapshot(snap.id)}>
@@ -224,6 +225,15 @@ export function SettingsPage() {
           danger
           onConfirm={() => { handleClearData(); setShowClearConfirm(false) }}
           onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
+      {restoreSnapshotId && (
+        <ConfirmDialog
+          message={`确定要从这个快照恢复数据吗？恢复前会自动备份当前数据，失败时自动回滚。快照包含 ${snapshots.find((s) => s.id === restoreSnapshotId)?.entryCount ?? 0} 条日记。`}
+          confirmLabel="确认恢复"
+          danger
+          onConfirm={() => { handleRestoreSnapshot(restoreSnapshotId); setRestoreSnapshotId(null) }}
+          onCancel={() => setRestoreSnapshotId(null)}
         />
       )}
     </div>

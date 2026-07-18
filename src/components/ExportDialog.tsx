@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
-import { createExportZip, generateExportFilename, generateBackupData } from '../services/backup'
+import { createExportZip, generateExportFilename, generateBackupData, previewBackup } from '../services/backup'
 import type { ExportPreview } from '../db/models'
 import { XIcon, DownloadIcon } from './Icons'
-import { previewBackup } from '../services/backup'
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<ExportPreview | null>(null)
@@ -24,7 +23,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 
       // Try Web Share API first
       if (navigator.share && navigator.canShare) {
-        const file = new File([blob], filename, { type: 'application/json' })
+        const file = new File([blob], filename, { type: 'application/zip' })
         const shareData = {
           title: '回声日记备份',
           text: '日记数据备份文件',
