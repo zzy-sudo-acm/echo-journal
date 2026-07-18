@@ -7,7 +7,7 @@ import { ImportDialog } from '../components/ImportDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
 import { getSnapshots, createDailySnapshot, cleanupOldSnapshots, pinSnapshot, deleteSnapshot, restoreFromSnapshot } from '../services/snapshot'
-import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, MoonIcon, PinIcon, ShieldIcon, SunIcon, TrashIcon, UploadIcon } from '../components/Icons'
+import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, PinIcon, ShieldIcon, TrashIcon, UploadIcon } from '../components/Icons'
 import type { InternalSnapshot } from '../db/models'
 import { db } from '../db/database'
 import { getLocalDateString, toLocalDate } from '../utils/date'
@@ -15,14 +15,14 @@ import type { JournalFont } from '../store/uiStore'
 
 const fontOptions: Array<{ value: JournalFont; label: string }> = [
   { value: 'modern', label: '现代' },
-  { value: 'wenkai', label: '文楷' },
-  { value: 'serif', label: '宋体' },
-  { value: 'fangsong', label: '仿宋' },
+  { value: 'rounded', label: '圆体' },
+  { value: 'fangsong', label: '书卷' },
+  { value: 'display', label: '个性' },
   { value: 'handwriting', label: '手写' },
 ]
 
 export function SettingsPage() {
-  const { theme, journalFont, setTheme, setJournalFont } = useUIStore()
+  const { journalFont, setJournalFont } = useUIStore()
   const [showExport, setShowExport] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -83,7 +83,6 @@ export function SettingsPage() {
       <section className="settings-section">
         <div className="settings-section-title">外观</div>
         <div className="appearance-settings">
-          <div className="settings-row theme-row"><span className="settings-row-label">{theme === 'dark' ? <MoonIcon /> : <SunIcon />}主题</span><div className="theme-switch" aria-label="主题"><button type="button" className={theme === 'dark' ? 'active' : ''} onClick={() => void setTheme('dark')}>深色</button><button type="button" className={theme === 'light' ? 'active' : ''} onClick={() => void setTheme('light')}>浅色</button></div></div>
           <div className="font-settings">
             <span className="font-settings-label">日记字体</span>
             <div className="font-choice-grid" role="radiogroup" aria-label="日记字体">
@@ -98,7 +97,7 @@ export function SettingsPage() {
                   onClick={() => void setJournalFont(option.value)}
                 >
                   <strong>{option.label}</strong>
-                  <span>今天的风，比昨天慢了一点。</span>
+                  <span>风吹过旧书页，也吹乱了今天的心事。</span>
                 </button>
               ))}
             </div>

@@ -2,12 +2,13 @@ import { create } from 'zustand'
 import { settingsRepo } from '../db/repository'
 
 export type Theme = 'dark' | 'light'
-export type JournalFont = 'modern' | 'wenkai' | 'serif' | 'fangsong' | 'handwriting'
+export type JournalFont = 'modern' | 'rounded' | 'fangsong' | 'display' | 'handwriting'
 
-const journalFonts = new Set<JournalFont>(['modern', 'wenkai', 'serif', 'fangsong', 'handwriting'])
+const journalFonts = new Set<JournalFont>(['modern', 'rounded', 'fangsong', 'display', 'handwriting'])
 
 function normalizeJournalFont(value: unknown): JournalFont {
-  if (value === 'kai') return 'wenkai'
+  if (value === 'wenkai') return 'rounded'
+  if (value === 'kai' || value === 'serif') return 'fangsong'
   return typeof value === 'string' && journalFonts.has(value as JournalFont)
     ? value as JournalFont
     : 'modern'
