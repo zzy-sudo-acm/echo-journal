@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { QuickInput } from '../components/QuickInput'
-import { EntryCard } from '../components/EntryCard'
+import { TimelineDayGroup, type TimelineDayVariant } from '../components/TimelineDayGroup'
 import { EntryEditor } from '../components/EntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
@@ -37,6 +37,11 @@ export function TodayPage() {
     void refreshTimeline()
   }, [refreshTimeline])
 
+  const today = getLocalDateString()
+  const yesterdayDate = new Date()
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+  const yesterday = getLocalDateString(yesterdayDate)
+
   const groups = useMemo(() => {
     const grouped = new Map<string, Entry[]>()
     for (const entry of entries) {
@@ -45,8 +50,13 @@ export function TodayPage() {
       if (list) list.push(entry)
       else grouped.set(date, [entry])
     }
-    return [...grouped.entries()]
-  }, [entries])
+    const todayEntries = grouped.get(today) ?? []
+    const earlierGroups = [...grouped.entries()]
+      .filter(([date]) => date !== today)
+      .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
+
+    return [[today, todayEntries] as const, ...earlierGroups]
+  }, [entries, today])
 
   useEffect(() => {
     if (positioned.current || entries.length === 0) return
@@ -79,30 +89,29 @@ export function TodayPage() {
       </div>
 
       <div className="timeline" aria-label="日记时间流">
-        {groups.length === 0 ? (
-          <section className="day-group" id={`day-${getLocalDateString()}`}>
-            <div className="date-divider"><span>今天</span></div>
-            <p className="timeline-empty">这里还很安静。写下此刻，时间流会从这里开始。</p>
-          </section>
-        ) : groups.map(([date, dayEntries]) => (
-          <section className="day-group" id={`day-${date}`} key={date}>
-            <div className="date-divider"><span>{formatDateLabel(date)}</span></div>
-            <div className="day-entries">
-              {dayEntries.map((entry) => (
-                <EntryCard
-                  key={entry.id}
-                  entry={entry}
-                  onEdit={setEditingEntry}
-                  onDelete={setDeletingEntry}
-                  onCopied={() => showToast('已复制到剪贴板', 'success')}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+        {groups.map(([date, dayEntries]) => {
+          const variant: TimelineDayVariant = date === today
+            ? 'today'
+            : date === yesterday
+              ? 'yesterday'
+              : 'older'
 
-      <QuickInput onSaved={refreshTimeline} />
+          return (
+            <TimelineDayGroup
+              key={date}
+              date={date}
+              label={formatDateLabel(date)}
+              variant={variant}
+              entries={dayEntries}
+              onEdit={setEditingEntry}
+              onDelete={setDeletingEntry}
+              onCopied={() => showToast('已复制到剪贴板', 'success')}
+            >
+              {variant === 'today' ? <QuickInput onSaved={refreshTimeline} /> : null}
+            </TimelineDayGroup>
+          )
+        })}
+      </div>
 
       {editingEntry ? (
         <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} />
