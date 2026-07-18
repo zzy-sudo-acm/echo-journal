@@ -53,7 +53,7 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
         <div className="editor-fields">
           <label className="field-label">
             <span>标题（可选）</span>
-            <input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这一刻起个名字" />
+            <input className="journal-title-input" type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这一刻起个名字" />
           </label>
           <label className="field-label">
             <span>时间</span>
@@ -61,7 +61,7 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
           </label>
           <label className="field-label editor-content-field">
             <span>正文</span>
-            <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="写下此刻…" autoFocus />
+            <textarea className="journal-content-input" value={content} onChange={(event) => setContent(event.target.value)} placeholder="写下此刻…" autoFocus />
           </label>
           <div className="field-label"><span>标签</span><TagInput tags={tags} onChange={setTags} /></div>
         </div>

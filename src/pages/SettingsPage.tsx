@@ -11,9 +11,17 @@ import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, MoonIcon, P
 import type { InternalSnapshot } from '../db/models'
 import { db } from '../db/database'
 import { getLocalDateString, toLocalDate } from '../utils/date'
+import type { JournalFont } from '../store/uiStore'
+
+const fontOptions: Array<{ value: JournalFont; label: string }> = [
+  { value: 'modern', label: '现代' },
+  { value: 'serif', label: '宋体' },
+  { value: 'kai', label: '楷体' },
+  { value: 'fangsong', label: '仿宋' },
+]
 
 export function SettingsPage() {
-  const { theme, setTheme } = useUIStore()
+  const { theme, journalFont, setTheme, setJournalFont } = useUIStore()
   const [showExport, setShowExport] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -73,7 +81,28 @@ export function SettingsPage() {
 
       <section className="settings-section">
         <div className="settings-section-title">外观</div>
-        <div className="settings-row theme-row"><span className="settings-row-label">{theme === 'dark' ? <MoonIcon /> : <SunIcon />}主题</span><div className="theme-switch" aria-label="主题"><button type="button" className={theme === 'dark' ? 'active' : ''} onClick={() => void setTheme('dark')}>深色</button><button type="button" className={theme === 'light' ? 'active' : ''} onClick={() => void setTheme('light')}>浅色</button></div></div>
+        <div className="appearance-settings">
+          <div className="settings-row theme-row"><span className="settings-row-label">{theme === 'dark' ? <MoonIcon /> : <SunIcon />}主题</span><div className="theme-switch" aria-label="主题"><button type="button" className={theme === 'dark' ? 'active' : ''} onClick={() => void setTheme('dark')}>深色</button><button type="button" className={theme === 'light' ? 'active' : ''} onClick={() => void setTheme('light')}>浅色</button></div></div>
+          <div className="font-settings">
+            <span className="font-settings-label">日记字体</span>
+            <div className="font-choice-grid" role="radiogroup" aria-label="日记字体">
+              {fontOptions.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={`font-choice ${journalFont === option.value ? 'active' : ''}`}
+                  data-journal-font={option.value}
+                  role="radio"
+                  aria-checked={journalFont === option.value}
+                  onClick={() => void setJournalFont(option.value)}
+                >
+                  <strong>{option.label}</strong>
+                  <span>写下今天的心事</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="settings-section snapshot-section">

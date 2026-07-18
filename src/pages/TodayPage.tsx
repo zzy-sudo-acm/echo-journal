@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { QuickInput } from '../components/QuickInput'
+import { TimelineIntro } from '../components/TimelineIntro'
 import { TimelineDayGroup, type TimelineDayVariant } from '../components/TimelineDayGroup'
 import { EntryEditor } from '../components/EntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -83,10 +84,7 @@ export function TodayPage() {
 
   return (
     <main className="page timeline-page">
-      <div className="mobile-page-title">
-        <h1>时间流</h1>
-        <p>{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
-      </div>
+      <TimelineIntro />
 
       <div className="timeline" aria-label="日记时间流">
         {groups.map(([date, dayEntries]) => {

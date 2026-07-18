@@ -8,7 +8,6 @@ import { CalendarPage } from './pages/CalendarPage'
 import { SearchPage } from './pages/SearchPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { useUIStore } from './store/uiStore'
 import { createDailySnapshot, cleanupOldSnapshots } from './services/snapshot'
 
 function UpdatePrompt() {
@@ -67,12 +66,6 @@ function RouteScrollManager() {
 }
 
 function AppShell() {
-  const { initTheme } = useUIStore()
-
-  useEffect(() => {
-    initTheme()
-  }, [initTheme])
-
   // Daily snapshot on first open
   useEffect(() => {
     const checkAndSnapshot = async () => {
