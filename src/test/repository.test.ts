@@ -103,8 +103,8 @@ describe('Entry Repository', () => {
   })
 
   it('should list entries in desc order by default', async () => {
-    const e1 = await entryRepo.create({ content: '第一条', createdAt: '2024-01-01T10:00:00.000Z' })
-    const e2 = await entryRepo.create({ content: '第二条', createdAt: '2024-01-02T10:00:00.000Z' })
+    await entryRepo.create({ content: '第一条', createdAt: '2024-01-01T10:00:00.000Z' })
+    await entryRepo.create({ content: '第二条', createdAt: '2024-01-02T10:00:00.000Z' })
 
     const results = await entryRepo.list()
     expect(results[0].content).toBe('第二条')

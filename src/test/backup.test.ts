@@ -92,7 +92,6 @@ describe('Backup Import', () => {
 
   it('should parse a valid backup file', async () => {
     await entryRepo.create({ content: 'test', tags: ['tag'] })
-    const data = await generateBackupData()
 
     const blob = await createExportZip()
     const file = new File([blob], 'backup.json', { type: 'application/json' })
