@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
 import { BottomNav } from './components/BottomNav'
@@ -35,7 +35,7 @@ function UpdatePrompt() {
   return (
     <div style={{
       position: 'fixed',
-      bottom: 80,
+      bottom: 'calc(var(--nav-height) + var(--nav-bottom-gap) + var(--safe-bottom) + 16px)',
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: 500,
@@ -65,7 +65,28 @@ function RouteScrollManager() {
   return null
 }
 
+function getNavigationIndex(pathname: string) {
+  if (pathname === '/') return 0
+  if (pathname === '/calendar') return 1
+  if (pathname === '/search') return 2
+  if (pathname === '/settings' || pathname === '/review') return 3
+  return -1
+}
+
 function AppShell() {
+  const location = useLocation()
+  const currentIndex = getNavigationIndex(location.pathname)
+  const previousIndex = useRef(currentIndex)
+  const direction = currentIndex < 0 || currentIndex === previousIndex.current
+    ? 'none'
+    : currentIndex > previousIndex.current
+      ? 'right'
+      : 'left'
+
+  useLayoutEffect(() => {
+    previousIndex.current = currentIndex
+  }, [currentIndex])
+
   // Daily snapshot on first open
   useEffect(() => {
     const checkAndSnapshot = async () => {
@@ -83,13 +104,15 @@ function AppShell() {
     <div className="app-shell">
       <RouteScrollManager />
       <AppHeader />
-      <Routes>
-        <Route path="/" element={<TodayPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/review" element={<ReviewPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Routes>
+      <div className={`route-content route-enter-${direction}`} key={location.key}>
+        <Routes location={location}>
+          <Route path="/" element={<TodayPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/review" element={<ReviewPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </div>
       <BottomNav />
       <UpdatePrompt />
     </div>
