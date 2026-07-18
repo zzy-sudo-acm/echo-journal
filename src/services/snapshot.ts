@@ -147,8 +147,8 @@ export async function restoreFromSnapshot(snapshotId: string): Promise<void> {
       }
     })
 
-    // Step 4: Post-restore validation
-    const currentCount = await db.entries.count()
+    // Step 4: Post-restore validation (count all non-draft entries including soft-deleted)
+    const currentCount = await db.entries.filter((e) => !e.isDraft).count()
     if (currentCount !== snapshotData.manifest.entryCount) {
       throw new Error(
         `恢复后验证失败: 期望 ${snapshotData.manifest.entryCount} 条，实际 ${currentCount} 条`,

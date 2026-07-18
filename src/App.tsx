@@ -8,7 +8,9 @@ import { CalendarPage } from './pages/CalendarPage'
 import { SearchPage } from './pages/SearchPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { TrashPage } from './pages/TrashPage'
 import { createDailySnapshot, cleanupOldSnapshots } from './services/snapshot'
+import { useEntryStore } from './store/entryStore'
 
 function UpdatePrompt() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -65,6 +67,44 @@ function RouteScrollManager() {
   return null
 }
 
+function MidnightChecker() {
+  useEffect(() => {
+    const check = () => {
+      const changed = useEntryStore.getState().checkDateChange()
+      // The store handles reloading; we just need to trigger the check
+      void changed
+    }
+
+    // Check on visibility change
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    // Check on midnight: compute ms until next local midnight
+    const scheduleMidnightCheck = () => {
+      const now = new Date()
+      const midnight = new Date(now)
+      midnight.setHours(24, 0, 0, 0)
+      const msUntilMidnight = midnight.getTime() - now.getTime()
+      return setTimeout(() => {
+        check()
+        // Schedule next check
+        scheduleMidnightCheck()
+      }, msUntilMidnight + 1000) // 1s after midnight to be safe
+    }
+
+    let timer = scheduleMidnightCheck()
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      clearTimeout(timer)
+    }
+  }, [])
+
+  return null
+}
+
 function getNavigationIndex(pathname: string) {
   if (pathname === '/') return 0
   if (pathname === '/calendar') return 1
@@ -103,6 +143,7 @@ function AppShell() {
   return (
     <div className="app-shell">
       <RouteScrollManager />
+      <MidnightChecker />
       <AppHeader />
       <div className={`route-content route-enter-${direction}`} key={location.key}>
         <Routes location={location}>
@@ -111,6 +152,7 @@ function AppShell() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/trash" element={<TrashPage />} />
         </Routes>
       </div>
       <BottomNav />

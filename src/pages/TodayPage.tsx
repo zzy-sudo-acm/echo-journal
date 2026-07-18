@@ -25,7 +25,7 @@ function formatDateLabel(dateString: string) {
 }
 
 export function TodayPage() {
-  const { entries, loadEntries, updateEntry, deleteEntry } = useEntryStore()
+  const { entries, loadEntries, updateEntry, deleteEntry, restoreEntry } = useEntryStore()
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
   const { showToast } = useToast()
@@ -38,6 +38,18 @@ export function TodayPage() {
 
   useEffect(() => {
     void refreshTimeline()
+  }, [refreshTimeline])
+
+  // Check for date change when page becomes visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        const changed = useEntryStore.getState().checkDateChange()
+        if (changed) refreshTimeline()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [refreshTimeline])
 
   const today = getLocalDateString()
@@ -92,10 +104,17 @@ export function TodayPage() {
 
   const handleDelete = async () => {
     if (!deletingEntry) return
-    await deleteEntry(deletingEntry.id)
+    const deletedId = deletingEntry.id
+    await deleteEntry(deletedId)
     await refreshTimeline()
-    showToast('日记已删除', 'success')
     setDeletingEntry(null)
+    showToast('已移入回收站', 'success', {
+      label: '撤销',
+      action: async () => {
+        await restoreEntry(deletedId)
+        await refreshTimeline()
+      },
+    })
   }
 
   return (
@@ -132,7 +151,7 @@ export function TodayPage() {
       ) : null}
 
       {deletingEntry ? (
-        <ConfirmDialog message="确定要删除这条日记吗？此操作不可撤销。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} />
+        <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} />
       ) : null}
     </main>
   )

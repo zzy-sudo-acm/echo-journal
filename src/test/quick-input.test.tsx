@@ -70,4 +70,30 @@ describe('QuickInput', () => {
     expect(document.activeElement).toBe(textarea)
     expect(textarea.getAttribute('placeholder')).toBe('写下此刻…')
   })
+
+  it('saves immediately without stale draft resurrecting after save', async () => {
+    // Type content and immediately save (before draft debounce fires)
+    render(<QuickInput />)
+    const textarea = screen.getByPlaceholderText('这里还很安静')
+
+    fireEvent.focus(textarea)
+    fireEvent.change(textarea, { target: { value: '快速保存的内容' } })
+
+    // Immediately save without waiting for draft debounce
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+    // Wait for save to complete
+    await waitFor(async () => {
+      const entries = await db.entries.toArray()
+      expect(entries).toHaveLength(1)
+      expect(entries[0].content).toBe('快速保存的内容')
+    })
+
+    // Wait a bit more to ensure no stale draft reappears
+    await new Promise((resolve) => setTimeout(resolve, 800))
+
+    // Draft should still be null — no stale draft resurrection
+    const draft = await draftRepo.get()
+    expect(draft).toBeNull()
+  })
 })

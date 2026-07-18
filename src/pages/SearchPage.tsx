@@ -8,7 +8,7 @@ import {
   type SearchResult,
 } from '../services/search'
 import type { TagInfo, Entry, CreateEntryInput } from '../db/models'
-import { CalendarIcon, SearchIcon, XIcon } from '../components/Icons'
+import { CalendarIcon, SearchIcon, TagIcon, XIcon } from '../components/Icons'
 import { EntryEditor } from '../components/EntryEditor'
 import { SearchDateFilterPanel } from '../components/SearchDateFilter'
 import { useEntryStore } from '../store/entryStore'
@@ -41,6 +41,7 @@ export function SearchPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<SearchDateFilter>(NO_DATE_FILTER)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  const [tagFilterOpen, setTagFilterOpen] = useState(false)
   const [searching, setSearching] = useState(false)
   const [viewingEntry, setViewingEntry] = useState<Entry | null>(null)
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
@@ -48,14 +49,17 @@ export function SearchPage() {
   const { showToast } = useToast()
   const deferredKeyword = useDeferredValue(keyword.trim())
 
+  const loadMeta = async () => {
+    const [nextTags, dates] = await Promise.all([
+      entryRepo.getAllTags(),
+      entryRepo.getDatesWithEntries(),
+    ])
+    setTags(nextTags)
+    setDatesWithEntries(new Set(dates))
+  }
+
   useEffect(() => {
-    let cancelled = false
-    void Promise.all([entryRepo.getAllTags(), entryRepo.getDatesWithEntries()]).then(([nextTags, dates]) => {
-      if (cancelled) return
-      setTags(nextTags)
-      setDatesWithEntries(new Set(dates))
-    })
-    return () => { cancelled = true }
+    void loadMeta()
   }, [])
 
   useEffect(() => {
@@ -81,22 +85,30 @@ export function SearchPage() {
     return () => { cancelled = true }
   }, [deferredKeyword, selectedTag, dateFilter])
 
+  // Sort: by relevance score when keyword present, else by createdAt desc
+  const sortedResults = useMemo(() => {
+    const hasKeyword = Boolean(deferredKeyword)
+    if (hasKeyword) {
+      return [...results].sort((a, b) => b.score - a.score)
+    }
+    return [...results].sort((a, b) => b.entry.createdAt.localeCompare(a.entry.createdAt))
+  }, [results, deferredKeyword])
+
   const groupedResults = useMemo(() => {
-    const sorted = [...results].sort((a, b) => b.entry.createdAt.localeCompare(a.entry.createdAt))
     const groups = new Map<string, SearchResult[]>()
-    for (const result of sorted) {
+    for (const result of sortedResults) {
       const date = toLocalDate(result.entry.createdAt)
       const items = groups.get(date)
       if (items) items.push(result)
       else groups.set(date, [result])
     }
     return [...groups.entries()]
-  }, [results])
+  }, [sortedResults])
 
   const dateFilterLabel = useMemo(() => formatSearchDateFilter(dateFilter), [dateFilter])
   const hasCriteria = Boolean(keyword.trim() || selectedTag || dateFilter.mode !== 'all')
   const searchContext = [
-    keyword.trim() ? `“${keyword.trim()}”` : null,
+    keyword.trim() ? `"${keyword.trim()}"` : null,
     selectedTag ? `#${selectedTag}` : null,
     dateFilterLabel,
   ].filter(Boolean).join(' · ')
@@ -127,6 +139,15 @@ export function SearchPage() {
           {keyword ? <button type="button" className="icon-button" aria-label="清除搜索" onClick={() => setKeyword('')}><XIcon /></button> : null}
           <button
             type="button"
+            className={`icon-button search-date-trigger ${selectedTag ? 'active' : ''}`}
+            aria-label="按标签筛选"
+            aria-pressed={Boolean(selectedTag)}
+            onClick={() => setTagFilterOpen((open) => !open)}
+          >
+            <TagIcon />
+          </button>
+          <button
+            type="button"
             className={`icon-button search-date-trigger ${dateFilter.mode !== 'all' ? 'active' : ''}`}
             aria-label="按日期筛选"
             aria-pressed={dateFilter.mode !== 'all'}
@@ -135,6 +156,52 @@ export function SearchPage() {
             <CalendarIcon />
           </button>
         </div>
+
+        {tagFilterOpen ? (
+          <>
+            <button type="button" className="search-date-scrim" aria-label="关闭标签筛选" onClick={() => setTagFilterOpen(false)} />
+            <section className="search-date-panel" role="dialog" aria-modal="true" aria-labelledby="tag-filter-title">
+              <header className="search-date-header">
+                <div>
+                  <h2 id="tag-filter-title">选择标签</h2>
+                  <p>{selectedTag ? `已选: #${selectedTag}` : '单选一个标签筛选'}</p>
+                </div>
+                <button type="button" className="icon-button" aria-label="关闭标签筛选" onClick={() => setTagFilterOpen(false)}><XIcon /></button>
+              </header>
+              <div className="tag-filter-list">
+                {tags.length === 0 ? (
+                  <p className="date-filter-all-copy">暂无标签。</p>
+                ) : (
+                  tags.map((tag) => (
+                    <button
+                      type="button"
+                      key={tag.name}
+                      className={`tag-filter-option ${selectedTag === tag.name ? 'active' : ''}`}
+                      aria-pressed={selectedTag === tag.name}
+                      onClick={() => {
+                        setSelectedTag(selectedTag === tag.name ? null : tag.name)
+                        setTagFilterOpen(false)
+                      }}
+                    >
+                      <span>#{tag.name}</span>
+                      <span>{tag.count}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <footer className="search-date-actions">
+                {selectedTag ? (
+                  <button type="button" className="btn btn-ghost" onClick={() => { setSelectedTag(null); setTagFilterOpen(false) }}>
+                    清除标签
+                  </button>
+                ) : null}
+                <button type="button" className="btn btn-primary" onClick={() => setTagFilterOpen(false)}>
+                  完成
+                </button>
+              </footer>
+            </section>
+          </>
+        ) : null}
 
         {dateFilterOpen ? (
           <SearchDateFilterPanel
@@ -149,25 +216,24 @@ export function SearchPage() {
         ) : null}
       </div>
 
-      {dateFilterLabel ? (
-        <div className="search-active-filter">
-          <CalendarIcon />
-          <span>{dateFilterLabel}</span>
-          <button type="button" className="icon-button" aria-label="清除日期筛选" onClick={() => setDateFilter(NO_DATE_FILTER)}><XIcon /></button>
+      {/* Active filters display */}
+      {(selectedTag || dateFilterLabel) ? (
+        <div className="search-active-filters">
+          {selectedTag ? (
+            <div className="search-active-filter">
+              <TagIcon />
+              <span>#{selectedTag}</span>
+              <button type="button" className="icon-button" aria-label="清除标签筛选" onClick={() => setSelectedTag(null)}><XIcon /></button>
+            </div>
+          ) : null}
+          {dateFilterLabel ? (
+            <div className="search-active-filter">
+              <CalendarIcon />
+              <span>{dateFilterLabel}</span>
+              <button type="button" className="icon-button" aria-label="清除日期筛选" onClick={() => setDateFilter(NO_DATE_FILTER)}><XIcon /></button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
-
-      {tags.length > 0 ? (
-        <section className="recent-tags" aria-label="最近标签">
-          <div className="subsection-heading"><span>标签</span>{selectedTag ? <button type="button" onClick={() => setSelectedTag(null)}>清除</button> : null}</div>
-          <div className="tag-filter">
-            {tags.slice(0, 10).map((tag) => (
-              <button type="button" key={tag.name} className={selectedTag === tag.name ? 'active' : ''} aria-pressed={selectedTag === tag.name} onClick={() => setSelectedTag(selectedTag === tag.name ? null : tag.name)}>
-                #{tag.name}<span>{tag.count}</span>
-              </button>
-            ))}
-          </div>
-        </section>
       ) : null}
 
       <section className="search-results" aria-live="polite">

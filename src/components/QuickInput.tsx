@@ -20,10 +20,22 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
   const [saving, setSaving] = useState(false)
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle')
   const [draftLoaded, setDraftLoaded] = useState(false)
-  const { createEntry, saveDraft, clearDraft } = useEntryStore()
+  const { createEntry, clearDraft } = useEntryStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editedSinceMount = useRef(false)
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (draftTimer.current) {
+        clearTimeout(draftTimer.current)
+        draftTimer.current = null
+      }
+    }
+  }, [])
+
+  // Load draft on mount
   useEffect(() => {
     let cancelled = false
     draftRepo.get().then((draft) => {
@@ -46,37 +58,46 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
     textareaRef.current?.focus({ preventScroll: true })
   }, [focusRequest])
 
+  // Single debounce layer for draft saving
   useEffect(() => {
     if (!draftLoaded) return
-    let verifyTimer: ReturnType<typeof setTimeout> | undefined
-    const timer = setTimeout(async () => {
-      if (!content.trim() && tags.length === 0) {
-        await clearDraft()
-        setDraftStatus('idle')
-        return
-      }
 
-      setDraftStatus('saving')
-      saveDraft({ content, title: '', tags })
-      verifyTimer = setTimeout(async () => {
-        try {
-          const saved = await draftRepo.get()
-          const matches = saved?.content === content && saved.tags.join('\u0000') === tags.join('\u0000')
-          setDraftStatus(matches ? 'saved' : 'error')
-        } catch {
-          setDraftStatus('error')
-        }
-      }, 650)
-    }, 350)
+    // Cancel any pending draft save
+    if (draftTimer.current) {
+      clearTimeout(draftTimer.current)
+      draftTimer.current = null
+    }
+
+    if (!content.trim() && tags.length === 0) {
+      clearDraft()
+      setDraftStatus('idle')
+      return
+    }
+
+    setDraftStatus('saving')
+    draftTimer.current = setTimeout(() => {
+      draftTimer.current = null
+      draftRepo.save({ content, title: '', tags }).then(() => {
+        setDraftStatus('saved')
+      }).catch(() => {
+        setDraftStatus('error')
+      })
+    }, 600)
 
     return () => {
-      clearTimeout(timer)
-      if (verifyTimer) clearTimeout(verifyTimer)
+      // Don't clear timer on cleanup — we want it to fire
     }
-  }, [content, tags, draftLoaded, saveDraft, clearDraft])
+  }, [content, tags, draftLoaded, clearDraft])
 
   const handleSave = async () => {
     if (saving || !content.trim()) return
+
+    // Cancel any pending draft save before creating entry
+    if (draftTimer.current) {
+      clearTimeout(draftTimer.current)
+      draftTimer.current = null
+    }
+
     setSaving(true)
     try {
       await createEntry({
@@ -104,7 +125,6 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
           onChange={(event) => {
             editedSinceMount.current = true
             setContent(event.target.value)
-            setDraftStatus(event.target.value ? 'saving' : 'idle')
           }}
           onFocus={() => {
             setFocused(true)

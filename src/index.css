@@ -686,6 +686,12 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .search-active-filter > .icon { width: 16px; height: 16px; }
 .search-active-filter .icon-button { width: 36px; height: 36px; margin-left: -2px; }
 .search-active-filter .icon-button .icon { width: 14px; height: 14px; }
+.search-active-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.search-date-trigger.active { color: var(--accent); }
+.tag-filter-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; max-height: 260px; overflow-y: auto; }
+.tag-filter-option { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-secondary); color: var(--text-secondary); font-size: .82rem; text-align: left; }
+.tag-filter-option span:last-child { color: var(--text-tertiary); font-size: .7rem; }
+.tag-filter-option.active { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); background: var(--accent-bg); color: var(--accent); }
 .recent-tags { margin: 22px 0 12px; }
 .tag-filter { display: flex; flex-wrap: wrap; gap: 7px; }
 .tag-filter button { display: inline-flex; min-height: 40px; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 9px; color: var(--text-secondary); font-size: .76rem; }
@@ -801,10 +807,38 @@ mark { border-radius: 2px; background: var(--accent-bg); color: inherit; box-sha
 .backup-item-meta { color: var(--text-tertiary); font-size: .7rem; }
 .backup-item-actions { display: flex; gap: 4px; }
 
-.toast { position: relative; padding: 9px 14px; border: 1px solid var(--input-divider); border-radius: 8px; background: var(--action-bg); color: var(--text-primary); box-shadow: 0 8px 22px rgba(0, 0, 0, .14); font-size: .78rem; animation: toast-in var(--motion) ease both; }
+.toast { position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 14px; border: 1px solid var(--input-divider); border-radius: 8px; background: var(--action-bg); color: var(--text-primary); box-shadow: 0 8px 22px rgba(0, 0, 0, .14); font-size: .78rem; animation: toast-in var(--motion) ease both; }
 .toast-success { border-left-color: var(--success); }
 .toast-error { border-left-color: var(--danger); }
+.toast-undo { flex: 0 0 auto; min-height: 32px; padding: 0 8px; color: var(--accent); font-size: .76rem; font-weight: 580; white-space: nowrap; }
+.field-error { margin-top: 2px; color: var(--danger); font-size: .72rem; }
+input.input-error { border-color: var(--danger); }
 .review-empty { max-width: 440px; margin: 70px auto; }
+
+/* ── Trash Page ── */
+.trash-page { padding-top: 16px; padding-inline: 16px; }
+.trash-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px; }
+.trash-header > .icon-button { flex: 0 0 44px; margin-left: -6px; }
+.trash-header h1 { font-size: 1.22rem; }
+.trash-header p { margin-top: 3px; color: var(--text-secondary); font-size: .78rem; }
+.trash-header > .btn { flex: 0 0 auto; margin-left: auto; }
+.trash-empty { padding: 48px 12px; color: var(--text-secondary); font-size: .88rem; text-align: center; line-height: 1.8; }
+.trash-list { margin-top: 8px; }
+.trash-entry { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border-light); }
+.trash-entry:last-child { border-bottom-color: transparent; }
+.trash-entry-main { display: flex; min-width: 0; flex: 1; gap: 12px; }
+.trash-entry-time { flex: 0 0 46px; padding-top: 2px; color: var(--text-tertiary); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.trash-entry-title { display: block; font-size: .86rem; margin-bottom: 3px; }
+.trash-entry-preview { margin: 0; color: var(--text-primary); font-family: var(--journal-font); font-size: .86rem; line-height: 1.6; overflow-wrap: anywhere; }
+.trash-entry .entry-tags { margin-top: 4px; font-size: .7rem; }
+.trash-entry-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.trash-entry-actions .icon-button { width: 40px; height: 40px; }
+
+@media (min-width: 768px) {
+  .trash-page { padding-inline: 20px; }
+  .trash-entry-main { gap: 18px; }
+  .trash-entry-time { flex: 0 0 64px; }
+}
 
 @keyframes entry-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Entry } from '../db/models'
 import { CopyIcon, EditIcon, MoreIcon, TrashIcon, XIcon } from './Icons'
 
@@ -10,11 +10,14 @@ interface EntryCardProps {
 }
 
 const LONG_ENTRY_LENGTH = 320
+const LONG_PRESS_MS = 480
+const MOVE_THRESHOLD = 10
 
 export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps) {
   const [showActions, setShowActions] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   const time = new Date(entry.createdAt).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -23,12 +26,39 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
   })
   const isLong = entry.content.length > LONG_ENTRY_LENGTH
 
-  const startLongPress = () => {
-    longPressTimer.current = setTimeout(() => setShowActions(true), 480)
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => clearLongPressTimer()
+  }, [])
+
+  const startLongPress = (clientX: number, clientY: number) => {
+    touchStart.current = { x: clientX, y: clientY }
+    clearLongPressTimer()
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null
+      setShowActions(true)
+    }, LONG_PRESS_MS)
+  }
+
+  const checkLongPressMove = (clientX: number, clientY: number) => {
+    if (!touchStart.current || !longPressTimer.current) return
+    const dx = Math.abs(clientX - touchStart.current.x)
+    const dy = Math.abs(clientY - touchStart.current.y)
+    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+      clearLongPressTimer()
+    }
   }
 
   const cancelLongPress = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    touchStart.current = null
+    clearLongPressTimer()
   }
 
   const handleCopy = async () => {
@@ -49,7 +79,14 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
           setShowActions(true)
         }
       }}
-      onTouchStart={startLongPress}
+      onTouchStart={(event) => {
+        const touch = event.touches[0]
+        startLongPress(touch.clientX, touch.clientY)
+      }}
+      onTouchMove={(event) => {
+        const touch = event.touches[0]
+        checkLongPressMove(touch.clientX, touch.clientY)
+      }}
       onTouchEnd={cancelLongPress}
       onTouchCancel={cancelLongPress}
       onContextMenu={(event) => {

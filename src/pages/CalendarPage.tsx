@@ -18,7 +18,7 @@ export function CalendarPage() {
   const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set())
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
-  const { updateEntry, deleteEntry } = useEntryStore()
+  const { updateEntry, deleteEntry, restoreEntry } = useEntryStore()
   const { showToast } = useToast()
 
   const loadDates = async () => setDatesWithEntries(new Set(await entryRepo.getDatesWithEntries()))
@@ -46,10 +46,17 @@ export function CalendarPage() {
 
   const handleDelete = async () => {
     if (!deletingEntry) return
-    await deleteEntry(deletingEntry.id)
+    const deletedId = deletingEntry.id
+    await deleteEntry(deletedId)
     setDeletingEntry(null)
     await Promise.all([loadSelected(selectedDate), loadDates()])
-    showToast('日记已删除', 'success')
+    showToast('已移入回收站', 'success', {
+      label: '撤销',
+      action: async () => {
+        await restoreEntry(deletedId)
+        await Promise.all([loadSelected(selectedDate), loadDates()])
+      },
+    })
   }
 
   return (
@@ -64,7 +71,7 @@ export function CalendarPage() {
         </section>
       </div>
       {editingEntry ? <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
-      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} /> : null}
+      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} /> : null}
     </main>
   )
 }

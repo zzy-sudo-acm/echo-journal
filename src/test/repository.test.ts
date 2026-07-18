@@ -34,11 +34,37 @@ describe('Entry Repository', () => {
     expect(new Date(updated.updatedAt).getTime()).toBeGreaterThanOrEqual(new Date(created.updatedAt).getTime())
   })
 
-  it('should delete an entry', async () => {
+  it('should soft-delete an entry (move to trash)', async () => {
     const created = await entryRepo.create({ content: '待删除' })
     await entryRepo.delete(created.id)
     const retrieved = await entryRepo.get(created.id)
+    expect(retrieved).not.toBeNull()
+    expect(retrieved!.deletedAt).toBeTruthy()
+  })
+
+  it('should permanently delete an entry', async () => {
+    const created = await entryRepo.create({ content: '永久删除' })
+    await entryRepo.permanentDelete(created.id)
+    const retrieved = await entryRepo.get(created.id)
     expect(retrieved).toBeNull()
+  })
+
+  it('should restore a soft-deleted entry', async () => {
+    const created = await entryRepo.create({ content: '待恢复' })
+    await entryRepo.delete(created.id)
+    await entryRepo.restore(created.id)
+    const retrieved = await entryRepo.get(created.id)
+    expect(retrieved).not.toBeNull()
+    expect(retrieved!.deletedAt).toBeUndefined()
+  })
+
+  it('should list only active entries (exclude soft-deleted)', async () => {
+    const active = await entryRepo.create({ content: '活跃日记' })
+    const deletedEntry = await entryRepo.create({ content: '已删除日记' })
+    await entryRepo.delete(deletedEntry.id)
+    const results = await entryRepo.list()
+    expect(results.length).toBe(1)
+    expect(results[0].id).toBe(active.id)
   })
 
   // ── UTC date: entry near midnight UTC+8 should be grouped in LOCAL today ──
@@ -119,6 +145,47 @@ describe('Entry Repository', () => {
     const results = await entryRepo.list()
     expect(results[0].content).toBe('第二条')
     expect(results[1].content).toBe('第一条')
+  })
+
+  it('should save empty title as empty string', async () => {
+    const entry = await entryRepo.create({ content: '日记内容', title: '原始标题' })
+    await entryRepo.update(entry.id, { title: '' })
+    const updated = await entryRepo.get(entry.id)
+    expect(updated!.title).toBe('')
+  })
+
+  it('should save empty tags as empty array', async () => {
+    const entry = await entryRepo.create({ content: '带标签', tags: ['标签1', '标签2'] })
+    await entryRepo.update(entry.id, { tags: [] })
+    const updated = await entryRepo.get(entry.id)
+    expect(updated!.tags).toEqual([])
+  })
+
+  it('should exclude soft-deleted entries from tag counts', async () => {
+    await entryRepo.create({ content: '活跃', tags: ['日常'] })
+    const deleted = await entryRepo.create({ content: '已删', tags: ['日常'] })
+    await entryRepo.delete(deleted.id)
+    const tags = await entryRepo.getAllTags()
+    const dailyTag = tags.find((t) => t.name === '日常')
+    expect(dailyTag!.count).toBe(1)
+  })
+
+  it('should list trash entries', async () => {
+    const a = await entryRepo.create({ content: 'a' })
+    const b = await entryRepo.create({ content: 'b' })
+    await entryRepo.delete(a.id)
+    await entryRepo.delete(b.id)
+    const trash = await entryRepo.listTrash()
+    expect(trash.length).toBe(2)
+  })
+
+  it('should empty trash', async () => {
+    const a = await entryRepo.create({ content: 'a' })
+    await entryRepo.delete(a.id)
+    await entryRepo.emptyTrash()
+    const trash = await entryRepo.listTrash()
+    expect(trash.length).toBe(0)
+    expect(await entryRepo.getTrashCount()).toBe(0)
   })
 
   it('should get all tags with counts', async () => {

@@ -10,6 +10,7 @@ interface EntryState {
   draft: { content: string; title: string; tags: string[] } | null
   loading: boolean
   autoSaveTimer: ReturnType<typeof setTimeout> | null
+  todayDate: string
 
   loadToday: () => Promise<void>
   loadEntries: (query?: EntryQuery) => Promise<void>
@@ -17,9 +18,13 @@ interface EntryState {
   createEntry: (input: CreateEntryInput) => Promise<Entry>
   updateEntry: (id: string, patch: UpdateEntryInput) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
+  restoreEntry: (id: string) => Promise<void>
+  permanentDeleteEntry: (id: string) => Promise<void>
+  emptyTrash: () => Promise<void>
   saveDraft: (draft: { content: string; title: string; tags: string[] }) => void
   loadDraft: () => Promise<void>
   clearDraft: () => Promise<void>
+  checkDateChange: () => boolean
 }
 
 export const useEntryStore = create<EntryState>((set, get) => ({
@@ -29,6 +34,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   draft: null,
   loading: false,
   autoSaveTimer: null,
+  todayDate: getLocalDateString(),
 
   loadToday: async () => {
     const today = getLocalDateString()
@@ -38,7 +44,7 @@ export const useEntryStore = create<EntryState>((set, get) => ({
       orderBy: 'createdAt',
       orderDir: 'desc',
     })
-    set({ todayEntries: entries })
+    set({ todayEntries: entries, todayDate: today })
   },
 
   loadEntries: async (query?: EntryQuery) => {
@@ -56,6 +62,12 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   },
 
   createEntry: async (input: CreateEntryInput) => {
+    // Cancel any pending draft auto-save before creating entry
+    const timer = get().autoSaveTimer
+    if (timer) {
+      clearTimeout(timer)
+      set({ autoSaveTimer: null })
+    }
     const entry = await entryRepo.create({ ...input, isDraft: false })
     await get().loadToday()
     await draftRepo.clear()
@@ -73,12 +85,28 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     await get().loadToday()
   },
 
+  restoreEntry: async (id: string) => {
+    await entryRepo.restore(id)
+    await get().loadToday()
+  },
+
+  permanentDeleteEntry: async (id: string) => {
+    await entryRepo.permanentDelete(id)
+  },
+
+  emptyTrash: async () => {
+    await entryRepo.emptyTrash()
+  },
+
   saveDraft: (draft) => {
     set({ draft })
     const timer = get().autoSaveTimer
     if (timer) clearTimeout(timer)
     const newTimer = setTimeout(() => {
-      draftRepo.save(draft)
+      draftRepo.save(draft).catch(() => {
+        // Silently ignore draft save failures
+      })
+      set({ autoSaveTimer: null })
     }, 500)
     set({ autoSaveTimer: newTimer })
   },
@@ -89,7 +117,24 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   },
 
   clearDraft: async () => {
+    const timer = get().autoSaveTimer
+    if (timer) {
+      clearTimeout(timer)
+      set({ autoSaveTimer: null })
+    }
     await draftRepo.clear()
     set({ draft: null })
+  },
+
+  /** Returns true if the local date changed (crossed midnight) */
+  checkDateChange: () => {
+    const current = getLocalDateString()
+    if (current !== get().todayDate) {
+      set({ todayDate: current })
+      // Reload today's entries
+      get().loadToday()
+      return true
+    }
+    return false
   },
 }))

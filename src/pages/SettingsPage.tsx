@@ -30,6 +30,7 @@ export function SettingsPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [restoreSnapshotId, setRestoreSnapshotId] = useState<string | null>(null)
   const [entryCount, setEntryCount] = useState(0)
+  const [trashCount, setTrashCount] = useState(0)
   const [snapshots, setSnapshots] = useState<InternalSnapshot[]>([])
   const [showSnapshots, setShowSnapshots] = useState(false)
   const { showToast } = useToast()
@@ -51,7 +52,10 @@ export function SettingsPage() {
     return () => { cancelled = true }
   }, [])
 
-  const loadStats = async () => setEntryCount(await entryRepo.getEntryCount())
+  const loadStats = async () => {
+    setEntryCount(await entryRepo.getEntryCount())
+    setTrashCount(await entryRepo.getTrashCount())
+  }
   const loadSnapshots = async () => setSnapshots(await getSnapshots())
   useEffect(() => { void Promise.all([loadStats(), loadSnapshots()]) }, [])
 
@@ -141,7 +145,12 @@ export function SettingsPage() {
         ) : null}
       </section>
 
+      <section className="settings-section">
+        <div className="settings-section-title">数据管理</div>
+      </section>
+
       <section className="settings-section settings-links">
+        <Link className="settings-disclosure" to="/trash"><span className="settings-row-label"><TrashIcon /><span><strong>回收站</strong><small>{trashCount > 0 ? `${trashCount} 条` : '回收站是空的'}</small></span></span><ChevronRightIcon /></Link>
         <Link className="settings-disclosure" to="/review"><span className="settings-row-label"><ClockIcon /><span><strong>过去的今天</strong><small>查看往年同一天的记录</small></span></span><ChevronRightIcon /></Link>
         <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v1.0.0</small></span></div>
       </section>

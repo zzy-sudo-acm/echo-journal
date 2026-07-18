@@ -45,12 +45,18 @@ function entryLocalMonthDay(entry: Entry): string {
   return `${mm}-${dd}`
 }
 
+// ── Helpers to filter deleted entries ──
+
+function isActive(entry: Entry): boolean {
+  return !entry.deletedAt
+}
+
 export const entryRepo = {
   async create(input: CreateEntryInput): Promise<Entry> {
     const now = nowISO()
     const entry: Entry = {
       id: generateId(),
-      title: input.title || '',
+      title: input.title ?? '',
       content: input.content,
       tags: input.tags || [],
       createdAt: input.createdAt || now,
@@ -71,8 +77,11 @@ export const entryRepo = {
 
     const updated: Entry = {
       ...existing,
-      ...patch,
+      title: patch.title !== undefined ? patch.title : existing.title,
+      content: patch.content ?? existing.content,
       tags: patch.tags ?? existing.tags,
+      createdAt: patch.createdAt ?? existing.createdAt,
+      isDraft: patch.isDraft ?? existing.isDraft,
       updatedAt: nowISO(),
     }
     await db.entries.put(updated)
@@ -86,8 +95,52 @@ export const entryRepo = {
     return updated
   },
 
+  /** Soft-delete: move to trash instead of permanent removal */
   async delete(id: string): Promise<void> {
+    const existing = await db.entries.get(id)
+    if (!existing) return
+    existing.deletedAt = nowISO()
+    existing.updatedAt = nowISO()
+    await db.entries.put(existing)
+  },
+
+  /** Restore from trash */
+  async restore(id: string): Promise<Entry> {
+    const existing = await db.entries.get(id)
+    if (!existing) throw new Error(`Entry not found: ${id}`)
+    delete existing.deletedAt
+    existing.updatedAt = nowISO()
+    await db.entries.put(existing)
+    // Rebuild tag counts
+    for (const tag of existing.tags) {
+      await db.tags.put({ name: tag })
+    }
+    return existing
+  },
+
+  /** Permanently delete a single entry */
+  async permanentDelete(id: string): Promise<void> {
     await db.entries.delete(id)
+  },
+
+  /** Permanently delete all soft-deleted entries */
+  async emptyTrash(): Promise<void> {
+    const deleted = await db.entries.filter((e) => Boolean(e.deletedAt)).toArray()
+    for (const e of deleted) {
+      await db.entries.delete(e.id)
+    }
+  },
+
+  /** Count soft-deleted entries */
+  async getTrashCount(): Promise<number> {
+    return db.entries.filter((e) => Boolean(e.deletedAt)).count()
+  },
+
+  /** List soft-deleted entries (for trash page) */
+  async listTrash(): Promise<Entry[]> {
+    const entries = await db.entries.filter((e) => Boolean(e.deletedAt)).toArray()
+    entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return entries
   },
 
   async get(id: string): Promise<Entry | null> {
@@ -95,11 +148,12 @@ export const entryRepo = {
   },
 
   async list(query: EntryQuery = {}): Promise<Entry[]> {
-    // Dexie doesn't support complex local-date filtering at the DB level,
-    // so we apply filters post-query. For the expected data volume (< 10k entries),
-    // this is fine and avoids the UTC date bug.
-
     let entries = await db.entries.toArray()
+
+    // Exclude soft-deleted entries (unless querying drafts)
+    if (query.isDraft === undefined || !query.isDraft) {
+      entries = entries.filter(isActive)
+    }
 
     // Filter drafts
     if (query.isDraft !== undefined) {
@@ -129,8 +183,8 @@ export const entryRepo = {
       entries = entries.filter(
         (e) =>
           e.content.toLowerCase().includes(kw) ||
-          e.title.toLowerCase().includes(kw) ||
-          e.tags.some((t) => t.toLowerCase().includes(kw)),
+          (e.title || '').toLowerCase().includes(kw) ||
+          (e.tags || []).some((t) => t.toLowerCase().includes(kw)),
       )
     }
 
@@ -156,10 +210,9 @@ export const entryRepo = {
 
   async getDatesWithEntries(): Promise<string[]> {
     const entries = await db.entries.filter((e) => !e.isDraft).toArray()
-    // Use LOCAL dates
     const dates = new Set<string>()
     for (const e of entries) {
-      dates.add(entryLocalDate(e))
+      if (isActive(e)) dates.add(entryLocalDate(e))
     }
     return Array.from(dates).sort()
   },
@@ -168,6 +221,7 @@ export const entryRepo = {
     const entries = await db.entries.filter((e) => !e.isDraft).toArray()
     const tagMap = new Map<string, number>()
     for (const e of entries) {
+      if (!isActive(e)) continue
       for (const tag of e.tags) {
         tagMap.set(tag, (tagMap.get(tag) || 0) + 1)
       }
@@ -178,7 +232,7 @@ export const entryRepo = {
   },
 
   async getEntryCount(): Promise<number> {
-    return db.entries.filter((e) => !e.isDraft).count()
+    return db.entries.filter((e) => !e.isDraft && !e.deletedAt).count()
   },
 
   async getOnThisDay(month: number, day: number): Promise<Entry[]> {
@@ -186,7 +240,7 @@ export const entryRepo = {
 
     const entries = await db.entries.filter((e) => !e.isDraft).toArray()
     return entries
-      .filter((e) => entryLocalMonthDay(e) === targetMmdd)
+      .filter((e) => isActive(e) && entryLocalMonthDay(e) === targetMmdd)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
 }

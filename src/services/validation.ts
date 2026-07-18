@@ -30,6 +30,12 @@ export function validateEntry(raw: unknown): { entry: Entry } | { error: string 
   if (e.isDraft !== undefined && typeof e.isDraft !== 'boolean') {
     return { error: `entry.isDraft 必须是布尔值: ${e.id}` }
   }
+  if (e.deletedAt !== undefined && e.deletedAt !== null && typeof e.deletedAt !== 'string') {
+    return { error: `entry.deletedAt 必须是字符串或不存在: ${e.id}` }
+  }
+  if (typeof e.deletedAt === 'string' && isNaN(Date.parse(e.deletedAt))) {
+    return { error: `entry.deletedAt 必须是有效 ISO 日期字符串: ${e.id}` }
+  }
   if (!Array.isArray(e.tags)) {
     return { error: `entry.tags 必须是数组: ${e.id}` }
   }
@@ -48,6 +54,7 @@ export function validateEntry(raw: unknown): { entry: Entry } | { error: string 
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
       isDraft: e.isDraft === true,
+      ...(typeof e.deletedAt === 'string' ? { deletedAt: e.deletedAt } : {}),
     },
   }
 }

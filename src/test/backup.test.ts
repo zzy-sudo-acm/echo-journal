@@ -56,7 +56,7 @@ describe('Backup Generation', () => {
     expect(data.entries.length).toBe(2)
     expect(data.tags.length).toBe(2)
     expect(data.manifest.appName).toBe('回声日记')
-    expect(data.manifest.schemaVersion).toBe(1)
+    expect(data.manifest.schemaVersion).toBe(2)
     expect(data.manifest.checksum).toBeTruthy()
     // Checksum should be valid
     const actual = computeChecksum(data.entries, data.tags)

@@ -6,6 +6,7 @@ export interface Entry {
   createdAt: string // ISO 8601
   updatedAt: string // ISO 8601
   isDraft: boolean
+  deletedAt?: string // ISO 8601 — soft delete marker; absent for active entries
 }
 
 export interface CreateEntryInput {
@@ -99,6 +100,6 @@ export interface ImportResult {
   totalEntries: number
 }
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 export const APP_VERSION = '1.0.0'
 export const APP_NAME = '回声日记'

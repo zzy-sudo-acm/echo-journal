@@ -2,7 +2,6 @@ import JSZip from 'jszip'
 import { db } from '../db/database'
 import type { Entry, BackupData, BackupManifest, ExportPreview, ImportResult } from '../db/models'
 import { APP_NAME, APP_VERSION, SCHEMA_VERSION } from '../db/models'
-import { entryRepo } from '../db/repository'
 import { getLocalDateString, toLocalDate } from '../utils/date'
 import {
   validateBackupData,
@@ -357,7 +356,7 @@ export async function mergeImportWithRollback(
       skipped,
       updated,
       conflicts,
-      totalEntries: await entryRepo.getEntryCount(),
+      totalEntries: await db.entries.filter((e) => !e.isDraft).count(),
     }
   } catch (err) {
     // Transaction already rolled back by Dexie.
@@ -400,8 +399,8 @@ export async function replaceImportWithRollback(
       }
     })
 
-    // Post-transaction validation: verify data integrity
-    const currentCount = await entryRepo.getEntryCount()
+    // Post-transaction validation: verify data integrity (count all non-draft entries including soft-deleted)
+    const currentCount = await db.entries.filter((e) => !e.isDraft).count()
     if (currentCount !== data.manifest.entryCount) {
       // Something went wrong — roll back
       console.error(
