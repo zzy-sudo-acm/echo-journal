@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { entryRepo } from '../db/repository'
 import { useUIStore } from '../store/uiStore'
 import { ExportDialog } from '../components/ExportDialog'
 import { ImportDialog } from '../components/ImportDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/ToastContext'
 import { getSnapshots, createDailySnapshot, cleanupOldSnapshots, pinSnapshot, deleteSnapshot, restoreFromSnapshot } from '../services/snapshot'
-import { DownloadIcon, UploadIcon, SunIcon, MoonIcon, TrashIcon, PinIcon } from '../components/Icons'
+import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, MoonIcon, PinIcon, ShieldIcon, SunIcon, TrashIcon, UploadIcon } from '../components/Icons'
 import type { InternalSnapshot } from '../db/models'
 import { db } from '../db/database'
+import { getLocalDateString, toLocalDate } from '../utils/date'
 
 export function SettingsPage() {
   const { theme, setTheme } = useUIStore()
@@ -17,225 +19,93 @@ export function SettingsPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [restoreSnapshotId, setRestoreSnapshotId] = useState<string | null>(null)
   const [entryCount, setEntryCount] = useState(0)
-  const [tagCount, setTagCount] = useState(0)
   const [snapshots, setSnapshots] = useState<InternalSnapshot[]>([])
   const [showSnapshots, setShowSnapshots] = useState(false)
   const { showToast } = useToast()
 
-  useEffect(() => {
-    loadStats()
-    loadSnapshots()
-  }, [])
+  const loadStats = async () => setEntryCount(await entryRepo.getEntryCount())
+  const loadSnapshots = async () => setSnapshots(await getSnapshots())
+  useEffect(() => { void Promise.all([loadStats(), loadSnapshots()]) }, [])
 
-  const loadStats = async () => {
-    const count = await entryRepo.getEntryCount()
-    const tags = await entryRepo.getAllTags()
-    setEntryCount(count)
-    setTagCount(tags.length)
-  }
-
-  const loadSnapshots = async () => {
-    const snaps = await getSnapshots()
-    setSnapshots(snaps)
-  }
+  const todaySnapshot = snapshots.some((snapshot) => toLocalDate(snapshot.createdAt) === getLocalDateString())
 
   const handleClearData = async () => {
     try {
-      await db.entries.clear()
-      await db.drafts.clear()
-      await db.tags.clear()
-      await db.snapshots.clear()
+      await db.entries.clear(); await db.drafts.clear(); await db.tags.clear(); await db.snapshots.clear()
       showToast('所有数据已清除', 'success')
-      loadStats()
-      loadSnapshots()
-    } catch {
-      showToast('清除数据失败', 'error')
-    }
+      await Promise.all([loadStats(), loadSnapshots()])
+    } catch { showToast('清除数据失败', 'error') }
   }
 
   const handleCreateSnapshot = async () => {
     try {
-      const snap = await createDailySnapshot()
-      if (snap) {
-        showToast('快照已创建', 'success')
-      } else {
-        showToast('今天已有快照', 'info')
-      }
-      loadSnapshots()
-    } catch (err) {
-      showToast('创建快照失败', 'error')
-    }
-  }
-
-  const handleCleanupSnapshots = async () => {
-    await cleanupOldSnapshots()
-    showToast('已清理过期快照', 'success')
-    loadSnapshots()
-  }
-
-  const handlePinSnapshot = async (id: string) => {
-    await pinSnapshot(id)
-    loadSnapshots()
-  }
-
-  const handleDeleteSnapshot = async (id: string) => {
-    await deleteSnapshot(id)
-    showToast('快照已删除', 'success')
-    loadSnapshots()
+      const snapshot = await createDailySnapshot()
+      showToast(snapshot ? '快照已创建' : '今天已有快照', snapshot ? 'success' : 'info')
+      await loadSnapshots()
+    } catch { showToast('创建快照失败', 'error') }
   }
 
   const handleRestoreSnapshot = async (id: string) => {
     try {
       await restoreFromSnapshot(id)
       showToast('已从快照恢复', 'success')
-      loadStats()
-      loadSnapshots()
-    } catch {
-      showToast('恢复快照失败', 'error')
-    }
+      await Promise.all([loadStats(), loadSnapshots()])
+    } catch { showToast('恢复快照失败', 'error') }
   }
 
   return (
-    <div className="page">
-      <h1 style={{ marginBottom: 24 }}>设置</h1>
+    <main className="page settings-page">
+      <div className="page-heading"><h1>设置</h1><p>外观、回顾与本地数据</p></div>
 
-      {/* Theme */}
-      <div className="settings-section">
+      <section className="safety-overview" aria-labelledby="data-safety-title">
+        <div className="safety-heading"><ShieldIcon /><div><h2 id="data-safety-title">数据安全</h2><p>数据只保存在当前设备</p></div></div>
+        <div className="safety-stats">
+          <div><strong>{entryCount}</strong><span>条日记</span></div>
+          <div><strong>{todaySnapshot ? '已完成' : '待创建'}</strong><span>今日内部快照</span></div>
+        </div>
+      </section>
+
+      <section className="settings-section backup-actions" aria-labelledby="backup-title">
+        <div className="settings-section-title" id="backup-title">外部备份</div>
+        <button type="button" className="backup-action" onClick={() => setShowExport(true)}><DownloadIcon /><span><strong>导出备份</strong><small>保存完整数据与可阅读 Markdown</small></span><ChevronRightIcon /></button>
+        <button type="button" className="backup-action" onClick={() => setShowImport(true)}><UploadIcon /><span><strong>导入备份</strong><small>校验后合并或安全替换当前数据</small></span><ChevronRightIcon /></button>
+      </section>
+
+      <section className="settings-section">
         <div className="settings-section-title">外观</div>
-        <div className="settings-item">
-          <span className="settings-item-label">
-            {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
-            <span style={{ marginLeft: 8 }}>主题</span>
-          </span>
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          >
-            {theme === 'dark' ? '深色' : '浅色'}
-          </button>
-        </div>
-      </div>
+        <div className="settings-row theme-row"><span className="settings-row-label">{theme === 'dark' ? <MoonIcon /> : <SunIcon />}主题</span><div className="theme-switch" aria-label="主题"><button type="button" className={theme === 'dark' ? 'active' : ''} onClick={() => void setTheme('dark')}>深色</button><button type="button" className={theme === 'light' ? 'active' : ''} onClick={() => void setTheme('light')}>浅色</button></div></div>
+      </section>
 
-      {/* Data */}
-      <div className="settings-section">
-        <div className="settings-section-title">数据</div>
-        <div className="settings-item">
-          <span className="settings-item-label">日记数量</span>
-          <span className="settings-item-value">{entryCount} 条</span>
-        </div>
-        <div className="settings-item">
-          <span className="settings-item-label">标签数量</span>
-          <span className="settings-item-value">{tagCount} 个</span>
-        </div>
-      </div>
-
-      {/* Backup */}
-      <div className="settings-section">
-        <div className="settings-section-title">备份</div>
-        <button className="btn btn-primary btn-block" onClick={() => setShowExport(true)} style={{ marginBottom: 8 }}>
-          <DownloadIcon /> 导出备份
-        </button>
-        <button className="btn btn-secondary btn-block" onClick={() => setShowImport(true)} style={{ marginBottom: 8 }}>
-          <UploadIcon /> 导入备份
-        </button>
-
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-sm btn-secondary" onClick={handleCreateSnapshot}>
-              创建快照
-            </button>
-            <button className="btn btn-sm btn-secondary" onClick={handleCleanupSnapshots}>
-              清理过期快照
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => setShowSnapshots(!showSnapshots)}
-            >
-              {showSnapshots ? '隐藏快照' : `查看快照 (${snapshots.length})`}
-            </button>
+      <section className="settings-section snapshot-section">
+        <button type="button" className="settings-disclosure" aria-expanded={showSnapshots} onClick={() => setShowSnapshots((value) => !value)}><span><strong>内部快照</strong><small>{snapshots.length} 份 · 自动保留最近 7 份</small></span>{showSnapshots ? <ChevronDownIcon /> : <ChevronRightIcon />}</button>
+        {showSnapshots ? (
+          <div className="snapshot-content">
+            <div className="snapshot-toolbar"><button type="button" className="btn btn-secondary btn-sm" onClick={() => void handleCreateSnapshot()}>创建今日快照</button><button type="button" className="btn btn-ghost btn-sm" onClick={async () => { await cleanupOldSnapshots(); await loadSnapshots(); showToast('已清理过期快照', 'success') }}>清理过期快照</button></div>
+            {snapshots.length === 0 ? <p className="timeline-empty">暂无内部快照。</p> : snapshots.map((snapshot) => (
+              <div key={snapshot.id} className="snapshot-row">
+                <div><strong>{new Date(snapshot.createdAt).toLocaleString('zh-CN')}</strong><small>{snapshot.entryCount} 条日记 · {(snapshot.size / 1024).toFixed(1)} KB{snapshot.isPinned ? ' · 已固定' : ''}</small></div>
+                <div className="snapshot-actions"><button type="button" className="icon-button" aria-label={snapshot.isPinned ? '取消固定快照' : '固定快照'} onClick={async () => { await pinSnapshot(snapshot.id); await loadSnapshots() }}><PinIcon /></button><button type="button" className="btn btn-secondary btn-sm" onClick={() => setRestoreSnapshotId(snapshot.id)}>恢复</button><button type="button" className="icon-button danger-action" aria-label="删除快照" onClick={async () => { await deleteSnapshot(snapshot.id); await loadSnapshots(); showToast('快照已删除', 'success') }}><TrashIcon /></button></div>
+              </div>
+            ))}
           </div>
-        </div>
+        ) : null}
+      </section>
 
-        {showSnapshots && (
-          <div style={{ marginTop: 16 }}>
-            {snapshots.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>暂无内部快照</p>
-            ) : (
-              snapshots.map((snap) => (
-                <div key={snap.id} className="backup-item">
-                  <div className="backup-item-info">
-                    <div className="backup-item-date">
-                      {new Date(snap.createdAt).toLocaleString('zh-CN')}
-                      {snap.isPinned && ' 📌'}
-                    </div>
-                    <div className="backup-item-meta">
-                      {snap.entryCount} 条日记 · {(snap.size / 1024).toFixed(1)} KB
-                    </div>
-                  </div>
-                  <div className="backup-item-actions">
-                    <button className="btn btn-sm btn-ghost" onClick={() => handlePinSnapshot(snap.id)}>
-                      <PinIcon />
-                    </button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setRestoreSnapshotId(snap.id)}>
-                      恢复
-                    </button>
-                    <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteSnapshot(snap.id)}>
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+      <section className="settings-section settings-links">
+        <Link className="settings-disclosure" to="/review"><span className="settings-row-label"><ClockIcon /><span><strong>过去的今天</strong><small>查看往年同一天的记录</small></span></span><ChevronRightIcon /></Link>
+        <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v1.0.0</small></span></div>
+      </section>
 
-      {/* Danger zone */}
-      <div className="settings-section">
+      <section className="settings-section danger-zone">
         <div className="settings-section-title">危险操作</div>
-        <button
-          className="btn btn-danger btn-block"
-          onClick={() => setShowClearConfirm(true)}
-        >
-          清除全部数据
-        </button>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 8 }}>
-          此操作将删除所有日记、标签和内部备份。请先导出备份。
-        </p>
-      </div>
+        <button type="button" className="danger-row" onClick={() => setShowClearConfirm(true)}><TrashIcon /><span><strong>清除全部数据</strong><small>删除日记、草稿、标签与内部快照</small></span></button>
+        <p>此操作不可撤销，请先导出备份。</p>
+      </section>
 
-      {/* Info */}
-      <div className="settings-section">
-        <div className="settings-section-title">关于</div>
-        <div className="settings-item">
-          <span className="settings-item-label">回声日记</span>
-          <span className="settings-item-value">v1.0.0</span>
-        </div>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', padding: '8px 0' }}>
-          所有数据保存在当前设备中，不上传到任何服务器。
-        </p>
-      </div>
-
-      {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
-      {showImport && <ImportDialog onClose={() => { setShowImport(false); loadStats(); loadSnapshots() }} />}
-      {showClearConfirm && (
-        <ConfirmDialog
-          message="确定要清除全部数据吗？此操作不可撤销。建议先导出备份。"
-          confirmLabel="清除全部数据"
-          danger
-          onConfirm={() => { handleClearData(); setShowClearConfirm(false) }}
-          onCancel={() => setShowClearConfirm(false)}
-        />
-      )}
-      {restoreSnapshotId && (
-        <ConfirmDialog
-          message={`确定要从这个快照恢复数据吗？恢复前会自动备份当前数据，失败时自动回滚。快照包含 ${snapshots.find((s) => s.id === restoreSnapshotId)?.entryCount ?? 0} 条日记。`}
-          confirmLabel="确认恢复"
-          danger
-          onConfirm={() => { handleRestoreSnapshot(restoreSnapshotId); setRestoreSnapshotId(null) }}
-          onCancel={() => setRestoreSnapshotId(null)}
-        />
-      )}
-    </div>
+      {showExport ? <ExportDialog onClose={() => setShowExport(false)} /> : null}
+      {showImport ? <ImportDialog onClose={() => { setShowImport(false); void Promise.all([loadStats(), loadSnapshots()]) }} /> : null}
+      {showClearConfirm ? <ConfirmDialog message="确定要清除全部数据吗？此操作不可撤销。建议先导出备份。" confirmLabel="清除全部数据" danger onConfirm={() => { void handleClearData(); setShowClearConfirm(false) }} onCancel={() => setShowClearConfirm(false)} /> : null}
+      {restoreSnapshotId ? <ConfirmDialog message={`确定从这份快照恢复吗？恢复前会自动备份当前数据，失败时自动回滚。快照包含 ${snapshots.find((snapshot) => snapshot.id === restoreSnapshotId)?.entryCount ?? 0} 条日记。`} confirmLabel="确认恢复" danger onConfirm={() => { void handleRestoreSnapshot(restoreSnapshotId); setRestoreSnapshotId(null) }} onCancel={() => setRestoreSnapshotId(null)} /> : null}
+    </main>
   )
 }

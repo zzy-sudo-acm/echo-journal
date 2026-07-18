@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import type { BackupData, ExportPreview, ImportResult } from '../db/models'
 import { parseImportFile, previewBackup, mergeImportWithRollback, replaceImportWithRollback, createRollbackSnapshot } from '../services/backup'
 import { XIcon, UploadIcon } from './Icons'
-import { useToast } from './Toast'
+import { useToast } from './ToastContext'
 import { ConfirmDialog } from './ConfirmDialog'
 
 type Stage = 'select' | 'preview' | 'mode' | 'confirmReplace' | 'result'

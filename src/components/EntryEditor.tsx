@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { Entry, CreateEntryInput } from '../db/models'
 import { TagInput } from './TagInput'
 import { XIcon } from './Icons'
@@ -9,23 +9,21 @@ interface EntryEditorProps {
   onClose: () => void
 }
 
+function toDateTimeLocalValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
 export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
   const [content, setContent] = useState(entry?.content || '')
   const [title, setTitle] = useState(entry?.title || '')
   const [tags, setTags] = useState<string[]>(entry?.tags || [])
   const [saving, setSaving] = useState(false)
-  const [createdAt, setCreatedAt] = useState(
-    entry?.createdAt
-      ? new Date(entry.createdAt).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16)
-  )
+  const [createdAt, setCreatedAt] = useState(() => toDateTimeLocalValue(entry ? new Date(entry.createdAt) : new Date()))
 
   useEffect(() => {
-    // Lock body scroll
     document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = ''
-    }
+    return () => { document.body.style.overflow = '' }
   }, [])
 
   const handleSave = async () => {
@@ -39,8 +37,6 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
         createdAt: new Date(createdAt).toISOString(),
       })
       onClose()
-    } catch {
-      // Error handled by parent
     } finally {
       setSaving(false)
     }
@@ -48,79 +44,33 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 className="modal-title" style={{ margin: 0 }}>
-            {entry ? '编辑日记' : '新建日记'}
-          </h2>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }}>
-            <XIcon />
-          </button>
+      <section className="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title" onClick={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <h2 id="editor-title" className="modal-title">{entry ? '编辑日记' : '新建日记'}</h2>
+          <button type="button" className="icon-button" aria-label="关闭编辑器" onClick={onClose}><XIcon /></button>
+        </header>
+
+        <div className="editor-fields">
+          <label className="field-label">
+            <span>标题（可选）</span>
+            <input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这一刻起个名字" />
+          </label>
+          <label className="field-label">
+            <span>时间</span>
+            <input type="datetime-local" value={createdAt} onInput={(event) => setCreatedAt(event.currentTarget.value)} />
+          </label>
+          <label className="field-label editor-content-field">
+            <span>正文</span>
+            <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="写下此刻…" autoFocus />
+          </label>
+          <div className="field-label"><span>标签</span><TagInput tags={tags} onChange={setTags} /></div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <label style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>
-              标题（可选）
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="给这一天起个名字…"
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>
-              时间
-            </label>
-            <input
-              type="datetime-local"
-              value={createdAt}
-              onChange={(e) => setCreatedAt(e.target.value)}
-              style={{
-                fontFamily: 'var(--font-sans)',
-                fontSize: '0.9375rem',
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '10px 14px',
-                width: '100%',
-              }}
-            />
-          </div>
-
-          <div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="写点什么…"
-              autoFocus
-              style={{ minHeight: 160 }}
-            />
-          </div>
-
-          <div>
-            <TagInput tags={tags} onChange={setTags} />
-          </div>
+        <div className="modal-actions editor-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
+          <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving || !content.trim()}>{saving ? '保存中…' : '保存'}</button>
         </div>
-
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onClose}>
-            取消
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleSave}
-            disabled={saving || !content.trim()}
-            style={{ opacity: saving || !content.trim() ? 0.5 : 1 }}
-          >
-            {saving ? '保存中…' : '保存'}
-          </button>
-        </div>
-      </div>
+      </section>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { ToastProvider } from './components/Toast'
 import { BottomNav } from './components/BottomNav'
+import { AppHeader } from './components/AppHeader'
 import { TodayPage } from './pages/TodayPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { SearchPage } from './pages/SearchPage'
@@ -55,6 +56,16 @@ function UpdatePrompt() {
   )
 }
 
+function RouteScrollManager() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    if (pathname !== '/') window.scrollTo(0, 0)
+  }, [pathname])
+
+  return null
+}
+
 function AppShell() {
   const { initTheme } = useUIStore()
 
@@ -77,6 +88,8 @@ function AppShell() {
 
   return (
     <>
+      <RouteScrollManager />
+      <AppHeader />
       <Routes>
         <Route path="/" element={<TodayPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
