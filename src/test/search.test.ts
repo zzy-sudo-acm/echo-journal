@@ -103,44 +103,58 @@ describe('Search date filters', () => {
   })
 
   it('ranks title-exact-match old entry above body-match new entry', async () => {
-    // Old entry with keyword in title
     await entryRepo.create({ title: '火锅', content: '一年前写的', createdAt: localIso(2025, 7, 1) })
-    // New entry with keyword in body
     await entryRepo.create({ content: '今天又吃了火锅', createdAt: localIso(2026, 7, 18) })
 
     const results = await searchEntries('火锅')
 
-    // Title match gets higher score (+5 title vs +10 body, but title + body match...)
-    // Actually "火锅" appears in title (score 5), the new entry's content has "火锅" (score 10 + 3 for tag if any).
-    // Wait: for old entry: title match = +5. For new entry: content match = +10.
-    // But the search sorts by score descending, then by what? Let me check the search function.
-    // The search function adds +10 for content match and +5 for title match.
-    // So "今天又吃了火锅" gets +10 (content), and "火锅" gets +5 (title).
-    // Since searchEntries sorts by score desc, the new entry (10) would come before old entry (5).
-    // But the user requirement says "标题精确命中的旧日记不会被正文弱命中的新日记错误压后"
-    // This requires changing the scoring to give more weight to title matches.
-    // Actually, looking at the search code:
-    // score += 10 for content match
-    // score += 5 for title match
-    // So title match gets 5, content match gets 10.
-    // The user wants title matches to come first.
-    // Hmm, but the requirement says "标题精确命中" - maybe the exact match should have higher weight?
-    // Let me check what the actual requirement says again:
-    // "补充测试，确保标题精确命中的旧日记不会被正文弱命中的新日记错误压后"
-    // This means: if we search for "火锅", and an OLD entry has "火锅" in its TITLE,
-    // and a NEW entry has "火锅" somewhere in its BODY,
-    // the old entry should be ranked higher (or at least not pushed behind).
-
-    // For now let me just check that both results exist and are sorted by score.
     expect(results.length).toBe(2)
-    // Both match — verify they exist
-    const contents = results.map((r) => r.entry.content)
-    expect(contents).toContain('今天又吃了火锅')
-    expect(contents).toContain('一年前写的')
-    // The search function ranks by score. Content match = 10, title match = 5.
-    // With current scoring, content match wins. That's the current behavior.
-    // The test documents this but doesn't enforce a specific order since
-    // the requirement text says "keep relevance sort".
+    expect(results[0].entry.title).toBe('火锅')
+    expect(results[1].entry.content).toContain('火锅')
+  })
+
+  it('ranks title-partial-match above body-match', async () => {
+    await entryRepo.create({ title: '火锅探店', content: '上周', createdAt: localIso(2026, 6, 1) })
+    await entryRepo.create({ content: '今天吃了火锅', createdAt: localIso(2026, 7, 18) })
+
+    const results = await searchEntries('火锅')
+
+    expect(results.length).toBe(2)
+    expect(results[0].entry.title).toContain('火锅')
+    expect(results[1].entry.content).toContain('火锅')
+  })
+
+  it('breaks score ties by createdAt desc', async () => {
+    // Both entries match the keyword in content only (same score)
+    await entryRepo.create({ content: '今天吃了火锅', createdAt: localIso(2026, 7, 18) })
+    await entryRepo.create({ content: '昨天吃了火锅', createdAt: localIso(2026, 7, 17) })
+
+    const results = await searchEntries('火锅')
+
+    expect(results.length).toBe(2)
+    expect(results[0].entry.content).toBe('今天吃了火锅')
+    expect(results[1].entry.content).toBe('昨天吃了火锅')
+  })
+
+  it('ranks tag-exact-match above tag-partial-match', async () => {
+    await entryRepo.create({ content: '分类A', tags: ['火锅'], createdAt: localIso(2026, 7, 1) })
+    await entryRepo.create({ content: '分类B', tags: ['火锅店'], createdAt: localIso(2026, 7, 18) })
+
+    const results = await searchEntries('火锅')
+
+    expect(results.length).toBe(2)
+    expect(results[0].entry.tags).toContain('火锅')
+    expect(results[1].entry.tags).toContain('火锅店')
+  })
+
+  it('excludes deleted entries from search results', async () => {
+    await entryRepo.create({ content: '活跃的火锅记录', createdAt: localIso(2026, 7, 18) })
+    const deleted = await entryRepo.create({ content: '已删的火锅记录', createdAt: localIso(2026, 7, 18) })
+    await entryRepo.delete(deleted.id)
+
+    const results = await searchEntries('火锅')
+    expect(results.length).toBe(1)
+    expect(results[0].entry.content).toBe('活跃的火锅记录')
   })
 
   it('filters by tag only without keyword', async () => {

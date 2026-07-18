@@ -108,14 +108,17 @@ export const entryRepo = {
   async restore(id: string): Promise<Entry> {
     const existing = await db.entries.get(id)
     if (!existing) throw new Error(`Entry not found: ${id}`)
-    delete existing.deletedAt
-    existing.updatedAt = nowISO()
-    await db.entries.put(existing)
+    const { deletedAt: _deletedAt, ...rest } = existing
+    const restored: Entry = {
+      ...rest,
+      updatedAt: nowISO(),
+    }
+    await db.entries.put(restored)
     // Rebuild tag counts
-    for (const tag of existing.tags) {
+    for (const tag of restored.tags) {
       await db.tags.put({ name: tag })
     }
-    return existing
+    return restored
   },
 
   /** Permanently delete a single entry */
@@ -123,12 +126,11 @@ export const entryRepo = {
     await db.entries.delete(id)
   },
 
-  /** Permanently delete all soft-deleted entries */
+  /** Permanently delete all soft-deleted entries in a single transaction */
   async emptyTrash(): Promise<void> {
-    const deleted = await db.entries.filter((e) => Boolean(e.deletedAt)).toArray()
-    for (const e of deleted) {
-      await db.entries.delete(e.id)
-    }
+    await db.transaction('rw', db.entries, async () => {
+      await db.entries.filter((e) => Boolean(e.deletedAt)).delete()
+    })
   },
 
   /** Count soft-deleted entries */
@@ -199,13 +201,9 @@ export const entryRepo = {
       return 0
     })
 
-    if (query.offset) {
-      return entries.slice(query.offset)
-    }
-    if (query.limit) {
-      return entries.slice(0, query.limit)
-    }
-    return entries
+    const start = query.offset ?? 0
+    const end = query.limit !== undefined ? start + query.limit : undefined
+    return entries.slice(start, end)
   },
 
   async getDatesWithEntries(): Promise<string[]> {

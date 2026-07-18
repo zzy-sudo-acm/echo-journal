@@ -99,7 +99,9 @@ export function generateMarkdown(entries: Entry[]): string {
  */
 export async function createExportZip(): Promise<Blob> {
   const backupData = await generateBackupData()
-  const journalMd = generateMarkdown(backupData.entries)
+  // journal.md only contains active (non-deleted) entries
+  const activeEntries = backupData.entries.filter((e) => !e.deletedAt)
+  const journalMd = generateMarkdown(activeEntries)
   const manifestJson = JSON.stringify(backupData.manifest, null, 2)
   const backupJson = JSON.stringify(
     { manifest: backupData.manifest, entries: backupData.entries, tags: backupData.tags },
@@ -217,9 +219,14 @@ export function previewBackup(data: BackupData): ExportPreview {
     errors.push('备份数据版本比当前应用更新，可能不兼容')
   }
 
+  const activeCount = data.entries.filter((e) => !e.deletedAt).length
+  const trashCount = data.entries.filter((e) => Boolean(e.deletedAt)).length
+
   return {
     entryCount: data.manifest.entryCount,
     tagCount: data.manifest.tagCount,
+    activeEntryCount: activeCount,
+    trashEntryCount: trashCount,
     earliestEntry: data.manifest.earliestEntry,
     latestEntry: data.manifest.latestEntry,
     appVersion: data.manifest.appVersion,

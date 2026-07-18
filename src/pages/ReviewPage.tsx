@@ -12,7 +12,7 @@ export function ReviewPage() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
-  const { updateEntry, deleteEntry } = useEntryStore()
+  const { updateEntry, deleteEntry, restoreEntry } = useEntryStore()
   const { showToast } = useToast()
   const today = new Date()
   const month = today.getMonth()
@@ -46,10 +46,21 @@ export function ReviewPage() {
 
   const handleDelete = async () => {
     if (!deletingEntry) return
-    await deleteEntry(deletingEntry.id)
-    setDeletingEntry(null)
-    await loadReview()
-    showToast('日记已删除', 'success')
+    const deletedId = deletingEntry.id
+    try {
+      await deleteEntry(deletedId)
+      setDeletingEntry(null)
+      await loadReview()
+      showToast('已移入回收站', 'success', {
+        label: '撤销',
+        action: async () => {
+          await restoreEntry(deletedId)
+          await loadReview()
+        },
+      })
+    } catch {
+      showToast('删除失败', 'error')
+    }
   }
 
   return (
@@ -62,7 +73,7 @@ export function ReviewPage() {
         </Fragment>
       ))}
       {editingEntry ? <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
-      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} /> : null}
+      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger onConfirm={() => void handleDelete()} onCancel={() => setDeletingEntry(null)} /> : null}
     </main>
   )
 }

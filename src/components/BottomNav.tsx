@@ -10,7 +10,7 @@ const navItems = [
 ]
 
 function getActiveIndex(pathname: string) {
-  if (pathname === '/review') return 3
+  if (pathname === '/review' || pathname === '/trash') return 3
   const index = navItems.findIndex((item) => item.to === pathname)
   return index >= 0 ? index : 0
 }

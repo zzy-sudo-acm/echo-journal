@@ -85,16 +85,22 @@ export function SearchPage() {
     return () => { cancelled = true }
   }, [deferredKeyword, selectedTag, dateFilter])
 
-  // Sort: by relevance score when keyword present, else by createdAt desc
+  const hasKeyword = Boolean(deferredKeyword)
+
+  // When keyword present: flat list by relevance + createdAt tiebreaker
+  // When no keyword: grouped by date, sorted by createdAt desc
   const sortedResults = useMemo(() => {
-    const hasKeyword = Boolean(deferredKeyword)
     if (hasKeyword) {
-      return [...results].sort((a, b) => b.score - a.score)
+      return [...results].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score
+        return b.entry.createdAt.localeCompare(a.entry.createdAt)
+      })
     }
     return [...results].sort((a, b) => b.entry.createdAt.localeCompare(a.entry.createdAt))
-  }, [results, deferredKeyword])
+  }, [results, hasKeyword])
 
   const groupedResults = useMemo(() => {
+    if (hasKeyword) return null // No grouping when keyword present
     const groups = new Map<string, SearchResult[]>()
     for (const result of sortedResults) {
       const date = toLocalDate(result.entry.createdAt)
@@ -103,7 +109,7 @@ export function SearchPage() {
       else groups.set(date, [result])
     }
     return [...groups.entries()]
-  }, [sortedResults])
+  }, [sortedResults, hasKeyword])
 
   const dateFilterLabel = useMemo(() => formatSearchDateFilter(dateFilter), [dateFilter])
   const hasCriteria = Boolean(keyword.trim() || selectedTag || dateFilter.mode !== 'all')
@@ -249,7 +255,21 @@ export function SearchPage() {
               : '没有找到匹配关键词的记录。'}
           </p>
         ) : null}
-        {!searching ? groupedResults.map(([date, dayResults]) => (
+        {!searching && hasKeyword ? sortedResults.map((result) => (
+          <button type="button" className="search-result" key={result.entry.id} onClick={() => setViewingEntry(result.entry)}>
+            <time>
+              {new Date(result.entry.createdAt).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+              {' '}
+              {new Date(result.entry.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+            </time>
+            <span className="search-result-body">
+              {result.entry.title ? <strong>{highlight(result.entry.title, keyword)}</strong> : null}
+              <span>{highlight(result.matches.find((match) => match.field === 'content')?.snippet || result.entry.content.slice(0, 120), keyword)}</span>
+              {result.entry.tags.length ? <small>{result.entry.tags.map((tag) => `#${tag}`).join('  ')}</small> : null}
+            </span>
+          </button>
+        )) : null}
+        {!searching && !hasKeyword && groupedResults ? groupedResults.map(([date, dayResults]) => (
           <Fragment key={date}>
             <div className="date-divider"><span>{formatLocalDateString(date, { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
             {dayResults.map((result) => (

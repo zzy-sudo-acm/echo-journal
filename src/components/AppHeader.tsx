@@ -143,7 +143,7 @@ export function AppHeader() {
             编写
           </button>
           {desktopNavigation.map(({ to, label }) => {
-            const selected = pathname === to || (to === '/settings' && pathname === '/review')
+            const selected = pathname === to || (to === '/settings' && (pathname === '/review' || pathname === '/trash'))
             return (
               <Link
                 key={to}

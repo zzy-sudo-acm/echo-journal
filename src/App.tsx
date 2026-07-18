@@ -69,10 +69,10 @@ function RouteScrollManager() {
 
 function MidnightChecker() {
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+
     const check = () => {
-      const changed = useEntryStore.getState().checkDateChange()
-      // The store handles reloading; we just need to trigger the check
-      void changed
+      useEntryStore.getState().checkDateChange()
     }
 
     // Check on visibility change
@@ -81,24 +81,23 @@ function MidnightChecker() {
     }
     document.addEventListener('visibilitychange', handleVisibility)
 
-    // Check on midnight: compute ms until next local midnight
+    // Schedule next midnight check recursively, tracking the timer
     const scheduleMidnightCheck = () => {
       const now = new Date()
       const midnight = new Date(now)
       midnight.setHours(24, 0, 0, 0)
       const msUntilMidnight = midnight.getTime() - now.getTime()
-      return setTimeout(() => {
+      timer = setTimeout(() => {
         check()
-        // Schedule next check
         scheduleMidnightCheck()
-      }, msUntilMidnight + 1000) // 1s after midnight to be safe
+      }, msUntilMidnight + 1000)
     }
 
-    let timer = scheduleMidnightCheck()
+    scheduleMidnightCheck()
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
-      clearTimeout(timer)
+      if (timer) clearTimeout(timer)
     }
   }, [])
 
@@ -109,7 +108,7 @@ function getNavigationIndex(pathname: string) {
   if (pathname === '/') return 0
   if (pathname === '/calendar') return 1
   if (pathname === '/search') return 2
-  if (pathname === '/settings' || pathname === '/review') return 3
+  if (pathname === '/settings' || pathname === '/review' || pathname === '/trash') return 3
   return -1
 }
 

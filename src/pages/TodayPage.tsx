@@ -40,18 +40,6 @@ export function TodayPage() {
     void refreshTimeline()
   }, [refreshTimeline])
 
-  // Check for date change when page becomes visible
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        const changed = useEntryStore.getState().checkDateChange()
-        if (changed) refreshTimeline()
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibility)
-    return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [refreshTimeline])
-
   const today = getLocalDateString()
   const yesterdayDate = new Date()
   yesterdayDate.setDate(yesterdayDate.getDate() - 1)

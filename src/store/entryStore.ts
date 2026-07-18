@@ -9,7 +9,6 @@ interface EntryState {
   onThisDayEntries: Entry[]
   draft: { content: string; title: string; tags: string[] } | null
   loading: boolean
-  autoSaveTimer: ReturnType<typeof setTimeout> | null
   todayDate: string
 
   loadToday: () => Promise<void>
@@ -21,7 +20,6 @@ interface EntryState {
   restoreEntry: (id: string) => Promise<void>
   permanentDeleteEntry: (id: string) => Promise<void>
   emptyTrash: () => Promise<void>
-  saveDraft: (draft: { content: string; title: string; tags: string[] }) => void
   loadDraft: () => Promise<void>
   clearDraft: () => Promise<void>
   checkDateChange: () => boolean
@@ -33,7 +31,6 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   onThisDayEntries: [],
   draft: null,
   loading: false,
-  autoSaveTimer: null,
   todayDate: getLocalDateString(),
 
   loadToday: async () => {
@@ -49,11 +46,16 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
   loadEntries: async (query?: EntryQuery) => {
     set({ loading: true })
-    const entries = await entryRepo.list({
-      isDraft: false,
-      ...query,
-    })
-    set({ entries, loading: false })
+    try {
+      const entries = await entryRepo.list({
+        isDraft: false,
+        ...query,
+      })
+      set({ entries, loading: false })
+    } catch (err) {
+      set({ loading: false })
+      throw err
+    }
   },
 
   loadOnThisDay: async (month: number, day: number) => {
@@ -62,12 +64,6 @@ export const useEntryStore = create<EntryState>((set, get) => ({
   },
 
   createEntry: async (input: CreateEntryInput) => {
-    // Cancel any pending draft auto-save before creating entry
-    const timer = get().autoSaveTimer
-    if (timer) {
-      clearTimeout(timer)
-      set({ autoSaveTimer: null })
-    }
     const entry = await entryRepo.create({ ...input, isDraft: false })
     await get().loadToday()
     await draftRepo.clear()
@@ -98,30 +94,12 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     await entryRepo.emptyTrash()
   },
 
-  saveDraft: (draft) => {
-    set({ draft })
-    const timer = get().autoSaveTimer
-    if (timer) clearTimeout(timer)
-    const newTimer = setTimeout(() => {
-      draftRepo.save(draft).catch(() => {
-        // Silently ignore draft save failures
-      })
-      set({ autoSaveTimer: null })
-    }, 500)
-    set({ autoSaveTimer: newTimer })
-  },
-
   loadDraft: async () => {
     const draft = await draftRepo.get()
     set({ draft })
   },
 
   clearDraft: async () => {
-    const timer = get().autoSaveTimer
-    if (timer) {
-      clearTimeout(timer)
-      set({ autoSaveTimer: null })
-    }
     await draftRepo.clear()
     set({ draft: null })
   },
@@ -131,8 +109,8 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     const current = getLocalDateString()
     if (current !== get().todayDate) {
       set({ todayDate: current })
-      // Reload today's entries
-      get().loadToday()
+      // Reload today's entries — fire-and-forget
+      void get().loadToday()
       return true
     }
     return false

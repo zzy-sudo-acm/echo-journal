@@ -93,6 +93,41 @@ describe('Backup Generation', () => {
     expect(md).toContain('生活')
   })
 
+  it('should exclude soft-deleted entries from journal.md', async () => {
+    await entryRepo.create({ content: '正常日记', tags: ['日常'] })
+    const deleted = await entryRepo.create({ content: '已删日记', tags: ['删除'] })
+    await entryRepo.delete(deleted.id)
+
+    const data = await generateBackupData()
+    const activeEntries = data.entries.filter((e) => !e.deletedAt)
+    const md = generateMarkdown(activeEntries)
+
+    expect(md).toContain('正常日记')
+    expect(md).not.toContain('已删日记')
+  })
+
+  it('should include soft-deleted entries in backup.json for full recovery', async () => {
+    await entryRepo.create({ content: '正常日记' })
+    const deleted = await entryRepo.create({ content: '已删日记' })
+    await entryRepo.delete(deleted.id)
+
+    const data = await generateBackupData()
+    expect(data.entries.length).toBe(2)
+    expect(data.entries.some((e) => Boolean(e.deletedAt))).toBe(true)
+  })
+
+  it('should report active and trash counts in preview', async () => {
+    await entryRepo.create({ content: '正常' })
+    const deleted = await entryRepo.create({ content: '已删' })
+    await entryRepo.delete(deleted.id)
+
+    const data = await generateBackupData()
+    const preview = previewBackup(data)
+
+    expect(preview.activeEntryCount).toBe(1)
+    expect(preview.trashEntryCount).toBe(1)
+  })
+
   it('should create a real ZIP export blob', async () => {
     await entryRepo.create({ content: '测试' })
     const blob = await createExportZip()

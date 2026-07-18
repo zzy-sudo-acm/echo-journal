@@ -53,4 +53,14 @@ describe('AppHeader desktop navigation', () => {
     expect(screen.getByLabelText('当前路径').textContent).toBe('/')
     expect(scrollTo).not.toHaveBeenCalled()
   })
+
+  it('treats trash as part of settings navigation', () => {
+    render(
+      <MemoryRouter initialEntries={['/trash']}>
+        <AppHeader />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: '设置' }).getAttribute('aria-current')).toBe('page')
+  })
 })

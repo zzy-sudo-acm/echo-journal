@@ -72,26 +72,45 @@ export async function searchEntries(
     const tags = entry.tags || []
     if (tag && !tags.includes(tag)) continue
 
-    if (kw && entry.content.toLocaleLowerCase().includes(kw)) {
-      const idx = entry.content.toLocaleLowerCase().indexOf(kw)
-      const start = Math.max(0, idx - 30)
-      const end = Math.min(entry.content.length, idx + kw.length + 30)
-      let snippet = entry.content.slice(start, end)
-      if (start > 0) snippet = '…' + snippet
-      if (end < entry.content.length) snippet += '…'
-      matches.push({ field: 'content', snippet })
-      score += 10
-    }
+    if (kw) {
+      // Pre-compute lowercased values once per entry
+      const titleLower = title.toLocaleLowerCase()
+      const contentLower = entry.content.toLocaleLowerCase()
 
-    if (kw && title.toLocaleLowerCase().includes(kw)) {
-      matches.push({ field: 'title', snippet: title })
-      score += 5
-    }
+      // Title exact match (highest priority)
+      if (titleLower === kw) {
+        matches.push({ field: 'title', snippet: title })
+        score += 30
+      } else if (titleLower.includes(kw)) {
+        matches.push({ field: 'title', snippet: title })
+        score += 20
+      }
 
-    const matchedTag = kw ? tags.find((tag) => tag.toLocaleLowerCase().includes(kw)) : undefined
-    if (matchedTag) {
-      matches.push({ field: 'tags', snippet: matchedTag })
-      score += 3
+      // Content match
+      if (contentLower.includes(kw)) {
+        const idx = contentLower.indexOf(kw)
+        const start = Math.max(0, idx - 30)
+        const end = Math.min(entry.content.length, idx + kw.length + 30)
+        let snippet = entry.content.slice(start, end)
+        if (start > 0) snippet = '…' + snippet
+        if (end < entry.content.length) snippet += '…'
+        matches.push({ field: 'content', snippet })
+        score += 10
+      }
+
+      // Tag exact match
+      if (tags.some((t) => t.toLocaleLowerCase() === kw)) {
+        const matchedTag = tags.find((t) => t.toLocaleLowerCase() === kw)!
+        matches.push({ field: 'tags', snippet: matchedTag })
+        score += 8
+      } else {
+        // Tag partial match
+        const matchedTag = tags.find((t) => t.toLocaleLowerCase().includes(kw))
+        if (matchedTag) {
+          matches.push({ field: 'tags', snippet: matchedTag })
+          score += 3
+        }
+      }
     }
 
     if (!kw || matches.length > 0) {
@@ -99,6 +118,10 @@ export async function searchEntries(
     }
   }
 
-  results.sort((a, b) => b.score - a.score)
+  // Sort by score desc, then by createdAt desc as tiebreaker
+  results.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return b.entry.createdAt.localeCompare(a.entry.createdAt)
+  })
   return results
 }

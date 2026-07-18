@@ -82,6 +82,8 @@ export interface BackupData {
 export interface ExportPreview {
   entryCount: number
   tagCount: number
+  activeEntryCount: number
+  trashEntryCount: number
   earliestEntry: string | null
   latestEntry: string | null
   appVersion: string

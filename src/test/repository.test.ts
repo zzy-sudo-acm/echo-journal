@@ -67,6 +67,17 @@ describe('Entry Repository', () => {
     expect(results[0].id).toBe(active.id)
   })
 
+  it('should only delete soft-deleted entries on emptyTrash', async () => {
+    const active = await entryRepo.create({ content: '活跃' })
+    const draft = await entryRepo.create({ content: '草稿', isDraft: true })
+    const deleted = await entryRepo.create({ content: '已删' })
+    await entryRepo.delete(deleted.id)
+    await entryRepo.emptyTrash()
+    expect(await entryRepo.get(active.id)).not.toBeNull()
+    expect(await entryRepo.get(draft.id)).not.toBeNull()
+    expect(await entryRepo.get(deleted.id)).toBeNull()
+  })
+
   // ── UTC date: entry near midnight UTC+8 should be grouped in LOCAL today ──
   it('should group entry in LOCAL today even when UTC date differs', async () => {
     const localDate = getLocalDateString()
@@ -196,6 +207,16 @@ describe('Entry Repository', () => {
     expect(tags.length).toBe(3)
     const tag1 = tags.find((t) => t.name === 'tag1')
     expect(tag1!.count).toBe(2)
+  })
+
+  it('should correctly paginate with both offset and limit', async () => {
+    for (let i = 1; i <= 6; i++) {
+      await entryRepo.create({ content: `日记${i}`, createdAt: `2024-01-0${i}T10:00:00.000Z` })
+    }
+    const results = await entryRepo.list({ offset: 2, limit: 3, orderBy: 'createdAt', orderDir: 'asc' })
+    expect(results.length).toBe(3)
+    expect(results[0].content).toBe('日记3')
+    expect(results[2].content).toBe('日记5')
   })
 
   it('should get on this day entries using LOCAL date comparison', async () => {

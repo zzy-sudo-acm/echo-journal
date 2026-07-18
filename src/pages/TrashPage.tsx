@@ -12,6 +12,8 @@ export function TrashPage() {
   const [trashEntries, setTrashEntries] = useState<Entry[]>([])
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [executingDelete, setExecutingDelete] = useState(false)
+  const [showEmptyConfirm, setShowEmptyConfirm] = useState(false)
   const [emptying, setEmptying] = useState(false)
   const { restoreEntry, permanentDeleteEntry, emptyTrash, loadToday } = useEntryStore()
   const { showToast } = useToast()
@@ -48,16 +50,31 @@ export function TrashPage() {
   }
 
   const handlePermanentDelete = async (id: string) => {
-    await permanentDeleteEntry(id)
-    await loadTrash()
-    showToast('已彻底删除', 'success')
+    setExecutingDelete(true)
+    try {
+      await permanentDeleteEntry(id)
+      await loadTrash()
+      showToast('已彻底删除', 'success')
+    } catch {
+      showToast('彻底删除失败', 'error')
+    } finally {
+      setExecutingDelete(false)
+      setDeletingId(null)
+    }
   }
 
   const handleEmpty = async () => {
-    await emptyTrash()
-    await loadTrash()
-    setEmptying(false)
-    showToast('回收站已清空', 'success')
+    setEmptying(true)
+    try {
+      await emptyTrash()
+      await loadTrash()
+      setShowEmptyConfirm(false)
+      showToast('回收站已清空', 'success')
+    } catch {
+      showToast('清空回收站失败', 'error')
+    } finally {
+      setEmptying(false)
+    }
   }
 
   return (
@@ -69,7 +86,7 @@ export function TrashPage() {
           <p>{trashEntries.length > 0 ? `${trashEntries.length} 条已删除的日记` : '回收站是空的。'}</p>
         </div>
         {trashEntries.length > 0 ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEmptying(true)}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowEmptyConfirm(true)}>
             <TrashIcon />清空回收站
           </button>
         ) : null}
@@ -128,18 +145,20 @@ export function TrashPage() {
           message="确定要彻底删除这条日记吗？此操作不可撤销。"
           confirmLabel="彻底删除"
           danger
-          onConfirm={() => { void handlePermanentDelete(deletingId); setDeletingId(null) }}
+          confirming={executingDelete}
+          onConfirm={() => void handlePermanentDelete(deletingId)}
           onCancel={() => setDeletingId(null)}
         />
       ) : null}
 
-      {emptying ? (
+      {showEmptyConfirm ? (
         <ConfirmDialog
           message={`确定要清空回收站吗？将彻底删除全部 ${trashEntries.length} 条日记，此操作不可撤销。`}
           confirmLabel="清空回收站"
           danger
+          confirming={emptying}
           onConfirm={() => void handleEmpty()}
-          onCancel={() => setEmptying(false)}
+          onCancel={() => setShowEmptyConfirm(false)}
         />
       ) : null}
     </main>
