@@ -1,7 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createExportZip, generateExportFilename, generateBackupData, previewBackup } from '../services/backup'
 import type { ExportPreview } from '../db/models'
 import { XIcon, DownloadIcon } from './Icons'
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<ExportPreview | null>(null)
@@ -10,6 +24,10 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
+  const exportingRef = useRef(false)
+  const mountedRef = useRef(true)
+
+  // Init
   useEffect(() => {
     let cancelled = false
     document.body.style.overflow = 'hidden'
@@ -30,16 +48,22 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 
     return () => {
       cancelled = true
+      mountedRef.current = false
       document.body.style.overflow = ''
     }
   }, [])
 
   const handleExport = async () => {
-    if (exporting) return
+    // Sync ref guard — prevents rapid double-click before re-render
+    if (exportingRef.current) return
+    exportingRef.current = true
     setExporting(true)
     setExportError(null)
+
+    let blob: Blob | null = null
+
     try {
-      const blob = await createExportZip()
+      blob = await createExportZip()
       const filename = generateExportFilename()
 
       // Try Web Share API first
@@ -57,15 +81,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         }
       }
 
-      // Fallback to download
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // Fallback to download — reuse same blob
+      downloadBlob(blob, filename)
       onClose()
     } catch (err) {
       // User cancelled share — just close
@@ -73,28 +90,37 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         onClose()
         return
       }
-      // Try download fallback if share failed
-      try {
-        const blob = await createExportZip()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = generateExportFilename()
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        onClose()
-      } catch {
+      // Share failed but blob exists — retry download with same blob
+      if (blob) {
+        try {
+          downloadBlob(blob, generateExportFilename())
+          onClose()
+        } catch {
+          if (mountedRef.current) {
+            setExportError('导出失败，请稍后重试。')
+          }
+        }
+        return
+      }
+      // No blob at all — genuine failure
+      if (mountedRef.current) {
         setExportError('导出失败，请稍后重试。')
       }
     } finally {
-      setExporting(false)
+      exportingRef.current = false
+      if (mountedRef.current) {
+        setExporting(false)
+      }
     }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={() => {
+        if (!exportingRef.current) onClose()
+      }}
+    >
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 className="modal-title" style={{ margin: 0 }}>导出备份</h2>

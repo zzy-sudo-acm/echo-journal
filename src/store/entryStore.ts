@@ -25,6 +25,14 @@ interface EntryState {
   checkDateChange: () => boolean
 }
 
+/** Run a side-effect after a successful data mutation.
+ *  The refresh failure must never cause the mutation to appear as failed. */
+function refreshTodayBestEffort(loadToday: () => Promise<void>) {
+  void loadToday().catch(() => {
+    // Data mutation already succeeded; today-refresh failure is non-critical
+  })
+}
+
 export const useEntryStore = create<EntryState>((set, get) => ({
   entries: [],
   todayEntries: [],
@@ -73,17 +81,17 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
   updateEntry: async (id: string, patch: UpdateEntryInput) => {
     await entryRepo.update(id, patch)
-    await get().loadToday()
+    refreshTodayBestEffort(() => get().loadToday())
   },
 
   deleteEntry: async (id: string) => {
     await entryRepo.delete(id)
-    await get().loadToday()
+    refreshTodayBestEffort(() => get().loadToday())
   },
 
   restoreEntry: async (id: string) => {
     await entryRepo.restore(id)
-    await get().loadToday()
+    refreshTodayBestEffort(() => get().loadToday())
   },
 
   permanentDeleteEntry: async (id: string) => {
@@ -106,14 +114,14 @@ export const useEntryStore = create<EntryState>((set, get) => ({
 
   /** Returns true if the local date changed (crossed midnight).
    *  Only advances todayDate AFTER a successful loadToday().
-   *  On failure, keeps old todayDate so the next check will retry. */
+   *  On failure, keeps old todayDate so the next check will retry.
+   *  Does not produce unhandled Promise rejections. */
   checkDateChange: () => {
     const current = getLocalDateString()
     if (current === get().todayDate) {
       return false
     }
 
-    // Fire-and-forget: only advance date on success
     void get().loadToday().catch(() => {
       // loadToday failed — todayDate unchanged, next check retries
     })

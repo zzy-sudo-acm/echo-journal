@@ -14,6 +14,7 @@ let nextId = 0
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  const undoInProgress = useRef<Set<number>>(new Set())
 
   const showToast = useCallback(
     (text: string, type: 'success' | 'error' | 'info' = 'info', undoAction?: ToastAction) => {
@@ -28,24 +29,38 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const undoInProgress = useRef(false)
-
   const handleUndo = (toast: ToastMessage) => {
-    if (undoInProgress.current) return
+    if (undoInProgress.current.has(toast.id)) return
+
+    // Clear timer and remove toast immediately
     const timer = timers.current.get(toast.id)
     if (timer) {
       clearTimeout(timer)
       timers.current.delete(toast.id)
     }
     setToasts((prev) => prev.filter((t) => t.id !== toast.id))
-    if (toast.undoAction) {
-      undoInProgress.current = true
-      Promise.resolve(toast.undoAction.action()).catch(() => {
-        // action handles its own user feedback; Toast only prevents unhandled rejection
-      }).finally(() => {
-        undoInProgress.current = false
-      })
+
+    if (!toast.undoAction) return
+
+    undoInProgress.current.add(toast.id)
+
+    // Call action synchronously (catches sync throws), then wrap for async rejection safety
+    let result: unknown
+    try {
+      result = toast.undoAction.action()
+    } catch {
+      // Sync throw — caught, no unhandled rejection
+      undoInProgress.current.delete(toast.id)
+      return
     }
+
+    Promise.resolve(result)
+      .catch(() => {
+        // Async rejection — action handles its own user feedback
+      })
+      .finally(() => {
+        undoInProgress.current.delete(toast.id)
+      })
   }
 
   return (
