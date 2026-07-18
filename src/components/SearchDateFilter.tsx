@@ -6,7 +6,7 @@ import {
   formatSearchDateFilter,
   type SearchDateFilter,
 } from '../services/search'
-import { getLocalDateString } from '../utils/date'
+import { getLocalDateString, parseLocalDateString } from '../utils/date'
 
 interface SearchDateFilterProps {
   value: SearchDateFilter
@@ -22,7 +22,7 @@ function initialView(filter: SearchDateFilter): { year: number; month: number } 
     : filter.mode === 'range'
       ? filter.start
       : getLocalDateString()
-  const parsed = new Date(`${date}T12:00:00`)
+  const parsed = parseLocalDateString(date)
   return { year: parsed.getFullYear(), month: parsed.getMonth() }
 }
 
@@ -54,7 +54,7 @@ export function SearchDateFilterPanel({
     if (mode === 'day') {
       const date = draft.mode === 'day' ? draft.date : getLocalDateString()
       setDraft({ mode: 'day', date })
-      const parsed = new Date(`${date}T12:00:00`)
+      const parsed = parseLocalDateString(date)
       setYear(parsed.getFullYear())
       setMonth(parsed.getMonth())
       return

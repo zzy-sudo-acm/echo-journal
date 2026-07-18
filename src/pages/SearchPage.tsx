@@ -13,7 +13,7 @@ import { EntryEditor } from '../components/EntryEditor'
 import { SearchDateFilterPanel } from '../components/SearchDateFilter'
 import { useEntryStore } from '../store/entryStore'
 import { useToast } from '../components/ToastContext'
-import { toLocalDate } from '../utils/date'
+import { formatLocalDateString, toLocalDate } from '../utils/date'
 
 function highlight(text: string, keyword: string): ReactNode {
   const query = keyword.trim()
@@ -185,7 +185,7 @@ export function SearchPage() {
         ) : null}
         {!searching ? groupedResults.map(([date, dayResults]) => (
           <Fragment key={date}>
-            <div className="date-divider"><span>{new Date(`${date}T12:00:00`).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+            <div className="date-divider"><span>{formatLocalDateString(date, { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
             {dayResults.map((result) => (
               <button type="button" className="search-result" key={result.entry.id} onClick={() => setViewingEntry(result.entry)}>
                 <time>{new Date(result.entry.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
