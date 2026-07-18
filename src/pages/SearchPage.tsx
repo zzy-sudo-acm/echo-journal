@@ -1,9 +1,16 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { entryRepo } from '../db/repository'
-import { searchEntries, type SearchResult } from '../services/search'
+import {
+  NO_DATE_FILTER,
+  formatSearchDateFilter,
+  searchEntries,
+  type SearchDateFilter,
+  type SearchResult,
+} from '../services/search'
 import type { TagInfo, Entry, CreateEntryInput } from '../db/models'
-import { SearchIcon, XIcon } from '../components/Icons'
+import { CalendarIcon, SearchIcon, XIcon } from '../components/Icons'
 import { EntryEditor } from '../components/EntryEditor'
+import { SearchDateFilterPanel } from '../components/SearchDateFilter'
 import { useEntryStore } from '../store/entryStore'
 import { useToast } from '../components/ToastContext'
 import { toLocalDate } from '../utils/date'
@@ -30,28 +37,49 @@ export function SearchPage() {
   const [keyword, setKeyword] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [tags, setTags] = useState<TagInfo[]>([])
+  const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set())
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [dateFilter, setDateFilter] = useState<SearchDateFilter>(NO_DATE_FILTER)
+  const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [searching, setSearching] = useState(false)
   const [viewingEntry, setViewingEntry] = useState<Entry | null>(null)
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const { updateEntry } = useEntryStore()
   const { showToast } = useToast()
-
-  useEffect(() => { void entryRepo.getAllTags().then(setTags) }, [])
+  const deferredKeyword = useDeferredValue(keyword.trim())
 
   useEffect(() => {
-    if (!keyword.trim() && !selectedTag) {
+    let cancelled = false
+    void Promise.all([entryRepo.getAllTags(), entryRepo.getDatesWithEntries()]).then(([nextTags, dates]) => {
+      if (cancelled) return
+      setTags(nextTags)
+      setDatesWithEntries(new Set(dates))
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const hasCriteria = Boolean(deferredKeyword || selectedTag || dateFilter.mode !== 'all')
+    if (!hasCriteria) {
       setResults([])
       setSearching(false)
       return
     }
     setSearching(true)
-    const timer = setTimeout(async () => {
-      setResults(await searchEntries(keyword.trim(), selectedTag || undefined))
-      setSearching(false)
-    }, 180)
-    return () => clearTimeout(timer)
-  }, [keyword, selectedTag])
+    void searchEntries(deferredKeyword, selectedTag || undefined, dateFilter)
+      .then((nextResults) => {
+        if (cancelled) return
+        setResults(nextResults)
+        setSearching(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setResults([])
+        setSearching(false)
+      })
+    return () => { cancelled = true }
+  }, [deferredKeyword, selectedTag, dateFilter])
 
   const groupedResults = useMemo(() => {
     const sorted = [...results].sort((a, b) => b.entry.createdAt.localeCompare(a.entry.createdAt))
@@ -65,11 +93,25 @@ export function SearchPage() {
     return [...groups.entries()]
   }, [results])
 
+  const dateFilterLabel = useMemo(() => formatSearchDateFilter(dateFilter), [dateFilter])
+  const hasCriteria = Boolean(keyword.trim() || selectedTag || dateFilter.mode !== 'all')
+  const searchContext = [
+    keyword.trim() ? `“${keyword.trim()}”` : null,
+    selectedTag ? `#${selectedTag}` : null,
+    dateFilterLabel,
+  ].filter(Boolean).join(' · ')
+
   const handleUpdate = async (input: CreateEntryInput) => {
     if (!editingEntry) return
     await updateEntry(editingEntry.id, input)
-    setResults(await searchEntries(keyword.trim(), selectedTag || undefined))
-    setTags(await entryRepo.getAllTags())
+    const [nextResults, nextTags, dates] = await Promise.all([
+      searchEntries(keyword.trim(), selectedTag || undefined, dateFilter),
+      entryRepo.getAllTags(),
+      entryRepo.getDatesWithEntries(),
+    ])
+    setResults(nextResults)
+    setTags(nextTags)
+    setDatesWithEntries(new Set(dates))
     setEditingEntry(null)
     showToast('日记已更新', 'success')
   }
@@ -77,12 +119,43 @@ export function SearchPage() {
   return (
     <main className="page search-page">
       <div className="page-heading"><h1>搜索</h1><p>在本机找回写过的片段</p></div>
-      <label className="search-field">
-        <SearchIcon />
-        <span className="sr-only">搜索日记</span>
-        <input type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索日记正文、标题或标签" autoComplete="off" />
-        {keyword ? <button type="button" className="icon-button" aria-label="清除搜索" onClick={() => setKeyword('')}><XIcon /></button> : null}
-      </label>
+      <div className="search-tools">
+        <div className="search-field">
+          <SearchIcon />
+          <label className="sr-only" htmlFor="journal-search">搜索日记</label>
+          <input id="journal-search" type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索日记正文、标题或标签" autoComplete="off" />
+          {keyword ? <button type="button" className="icon-button" aria-label="清除搜索" onClick={() => setKeyword('')}><XIcon /></button> : null}
+          <button
+            type="button"
+            className={`icon-button search-date-trigger ${dateFilter.mode !== 'all' ? 'active' : ''}`}
+            aria-label="按日期筛选"
+            aria-pressed={dateFilter.mode !== 'all'}
+            onClick={() => setDateFilterOpen((open) => !open)}
+          >
+            <CalendarIcon />
+          </button>
+        </div>
+
+        {dateFilterOpen ? (
+          <SearchDateFilterPanel
+            value={dateFilter}
+            datesWithEntries={datesWithEntries}
+            onClose={() => setDateFilterOpen(false)}
+            onApply={(filter) => {
+              setDateFilter(filter)
+              setDateFilterOpen(false)
+            }}
+          />
+        ) : null}
+      </div>
+
+      {dateFilterLabel ? (
+        <div className="search-active-filter">
+          <CalendarIcon />
+          <span>{dateFilterLabel}</span>
+          <button type="button" className="icon-button" aria-label="清除日期筛选" onClick={() => setDateFilter(NO_DATE_FILTER)}><XIcon /></button>
+        </div>
+      ) : null}
 
       {tags.length > 0 ? (
         <section className="recent-tags" aria-label="最近标签">
@@ -99,8 +172,17 @@ export function SearchPage() {
 
       <section className="search-results" aria-live="polite">
         {searching ? <p className="timeline-empty">正在本机搜索…</p> : null}
-        {!searching && !keyword.trim() && !selectedTag ? <p className="search-hint">输入一个词，或选择标签。搜索只在当前设备中进行。</p> : null}
-        {!searching && results.length === 0 && (keyword.trim() || selectedTag) ? <p className="timeline-empty">没有找到匹配的记录。</p> : null}
+        {!searching && !hasCriteria ? <p className="search-hint">输入一个词、选择标签，或按日期回到某段时间。搜索只在当前设备中进行。</p> : null}
+        {!searching && results.length > 0 && hasCriteria ? <p className="search-context">{searchContext} · {results.length} 条记录</p> : null}
+        {!searching && results.length === 0 && hasCriteria ? (
+          <p className="timeline-empty">
+            {dateFilter.mode !== 'all'
+              ? keyword.trim() || selectedTag
+                ? '当前日期范围内没有匹配关键词的记录。'
+                : '当前日期范围内没有记录。'
+              : '没有找到匹配关键词的记录。'}
+          </p>
+        ) : null}
         {!searching ? groupedResults.map(([date, dayResults]) => (
           <Fragment key={date}>
             <div className="date-divider"><span>{new Date(`${date}T12:00:00`).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>

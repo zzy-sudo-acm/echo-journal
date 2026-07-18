@@ -118,12 +118,12 @@ export function QuickInput({ onSaved }: QuickInputProps) {
       {expanded ? (
         <div className="quick-input-details">
           <TagInput tags={tags} onChange={setTags} placeholder="添加标签" />
-          <label className="composer-time">
-            <ClockIcon />
-            <span className="sr-only">记录时间</span>
-            <input type="datetime-local" value={createdAt} onInput={(event) => setCreatedAt(event.currentTarget.value)} />
-          </label>
           <div className="quick-input-footer">
+            <label className="composer-time">
+              <ClockIcon />
+              <span className="sr-only">记录时间</span>
+              <input type="datetime-local" value={createdAt} onInput={(event) => setCreatedAt(event.currentTarget.value)} />
+            </label>
             <span className={`draft-indicator status-${draftStatus}`} aria-live="polite">
               {draftStatus === 'saving' ? '正在保存草稿…' : null}
               {draftStatus === 'saved' ? <><CheckIcon />草稿已保存</> : null}

@@ -9,11 +9,25 @@ interface CalendarProps {
   onSelectDate: (date: string) => void
   onPrevMonth: () => void
   onNextMonth: () => void
+  rangeStart?: string | null
+  rangeEnd?: string | null
+  selectable?: boolean
 }
 
 const DAY_HEADERS = ['日', '一', '二', '三', '四', '五', '六']
 
-export function Calendar({ year, month, datesWithEntries, selectedDate, onSelectDate, onPrevMonth, onNextMonth }: CalendarProps) {
+export function Calendar({
+  year,
+  month,
+  datesWithEntries,
+  selectedDate,
+  onSelectDate,
+  onPrevMonth,
+  onNextMonth,
+  rangeStart = null,
+  rangeEnd = null,
+  selectable = true,
+}: CalendarProps) {
   const today = getLocalDateString()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
@@ -38,13 +52,15 @@ export function Calendar({ year, month, datesWithEntries, selectedDate, onSelect
         {cells.map((cell, index) => {
           const isToday = cell.date === today
           const isSelected = cell.date === selectedDate
+          const isRangeEdge = cell.date !== null && (cell.date === rangeStart || cell.date === rangeEnd)
+          const isInRange = cell.date !== null && rangeStart !== null && rangeEnd !== null && cell.date >= rangeStart && cell.date <= rangeEnd
           const hasEntries = cell.date ? datesWithEntries.has(cell.date) : false
           return (
             <button
               type="button"
               key={`${cell.day}-${index}`}
-              className={`calendar-day ${cell.current ? '' : 'other-month'} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasEntries ? 'has-entries' : ''}`}
-              disabled={!cell.current || !cell.date}
+              className={`calendar-day ${cell.current ? '' : 'other-month'} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${isInRange ? 'in-range' : ''} ${isRangeEdge ? 'range-edge' : ''} ${hasEntries ? 'has-entries' : ''}`}
+              disabled={!cell.current || !cell.date || !selectable}
               aria-pressed={isSelected}
               aria-label={cell.date ? `${month + 1} 月 ${cell.day} 日${hasEntries ? '，有日记' : ''}` : undefined}
               onClick={() => { if (cell.date) onSelectDate(cell.date) }}
