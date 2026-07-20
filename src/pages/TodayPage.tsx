@@ -56,9 +56,9 @@ export function TodayPage() {
     const todayEntries = grouped.get(today) ?? []
     const earlierGroups = [...grouped.entries()]
       .filter(([date]) => date !== today)
-      .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
 
-    return [[today, todayEntries] as const, ...earlierGroups]
+    return [...earlierGroups, [today, todayEntries] as const]
   }, [entries, today])
 
   useEffect(() => {
