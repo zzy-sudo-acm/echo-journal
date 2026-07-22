@@ -654,14 +654,14 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  transition: border-color var(--motion-fast);
+  transition: border-color var(--motion-fast), padding var(--motion), max-height var(--motion) cubic-bezier(.22, 1, .36, 1);
 }
 .quick-input.is-expanded { position: relative; bottom: auto; max-height: min(62dvh, 460px); overflow-x: hidden; overflow-y: auto; padding: 8px 0 0; }
 .quick-input:has(textarea:focus-visible) { border-bottom-color: var(--accent); }
 .quick-input-topline, .quick-input-details { margin-left: 66px; }
 .timeline-day-card.is-empty .quick-input-topline, .timeline-day-card.is-empty .quick-input-details { margin-left: 0; }
 .quick-input-topline { position: relative; display: flex; align-items: flex-start; }
-.quick-input textarea { min-height: 50px; max-height: 220px; padding: 12px 0; border: 0; border-radius: 0; background: transparent; resize: none; font-family: var(--journal-font); font-size: 1rem; line-height: var(--journal-line-height); }
+.quick-input textarea { min-height: 50px; max-height: 220px; padding: 12px 0; border: 0; border-radius: 0; background: transparent; resize: none; font-family: var(--journal-font); font-size: 1rem; line-height: var(--journal-line-height); transition: min-height var(--motion) cubic-bezier(.22, 1, .36, 1); }
 .quick-input textarea::placeholder { color: var(--text-tertiary); font-family: var(--journal-font); opacity: .68; }
 .quick-input.is-expanded textarea { min-height: 126px; }
 .quick-input textarea:focus { border: 0; }

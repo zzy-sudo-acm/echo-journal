@@ -4,6 +4,10 @@ import { QuickInput } from '../components/QuickInput'
 import { db } from '../db/database'
 import { draftRepo } from '../db/repository'
 
+class MockVisualViewport extends EventTarget {
+  height = 800
+}
+
 describe('QuickInput', () => {
   beforeEach(async () => {
     await db.entries.clear()
@@ -69,6 +73,43 @@ describe('QuickInput', () => {
 
     expect(document.activeElement).toBe(textarea)
     expect(textarea.getAttribute('placeholder')).toBe('写下此刻…')
+  })
+
+  it('folds the composer after the Android keyboard is dismissed without a blur event', async () => {
+    const originalViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport')
+    const viewport = new MockVisualViewport()
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewport,
+    })
+
+    try {
+      render(<QuickInput />)
+      const textarea = screen.getByPlaceholderText('这里还很安静')
+      const composer = screen.getByLabelText('快速记录')
+
+      textarea.focus()
+      fireEvent.change(textarea, { target: { value: '键盘收起后仍保留的草稿' } })
+      expect(document.activeElement).toBe(textarea)
+      expect(composer.classList.contains('is-expanded')).toBe(true)
+
+      viewport.height = 460
+      viewport.dispatchEvent(new Event('resize'))
+      viewport.height = 800
+      viewport.dispatchEvent(new Event('resize'))
+
+      await waitFor(() => {
+        expect(composer.classList.contains('is-expanded')).toBe(false)
+        expect(document.activeElement).not.toBe(textarea)
+      })
+      expect((textarea as HTMLTextAreaElement).value).toBe('键盘收起后仍保留的草稿')
+    } finally {
+      if (originalViewport) {
+        Object.defineProperty(window, 'visualViewport', originalViewport)
+      } else {
+        Reflect.deleteProperty(window, 'visualViewport')
+      }
+    }
   })
 
   it('saves immediately without stale draft resurrecting after save', async () => {

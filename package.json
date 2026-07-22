@@ -1,7 +1,7 @@
 {
   "name": "echo-journal",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "回声日记 — 本地优先的私人日记 PWA",
   "type": "module",
   "scripts": {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { TagInput } from './TagInput'
 import { TagIcon } from './Icons'
@@ -21,6 +21,7 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle')
   const [draftLoaded, setDraftLoaded] = useState(false)
   const { createEntry, clearDraft } = useEntryStore()
+  const composerRef = useRef<HTMLElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editedSinceMount = useRef(false)
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -57,6 +58,60 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
     if (focusRequest === 0) return
     textareaRef.current?.focus({ preventScroll: true })
   }, [focusRequest])
+
+  const collapseComposer = useCallback(() => {
+    setFocused(false)
+    setExpanded(false)
+    setTagEditorOpen(false)
+  }, [])
+
+  // Android keeps the textarea focused when the Back button only dismisses the
+  // soft keyboard. Follow the visual viewport so the paper can fold back even
+  // when the browser does not emit a blur event.
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const resizeTarget: EventTarget = viewport ?? window
+    const getViewportHeight = () => viewport?.height ?? window.innerHeight
+    let restingHeight = getViewportHeight()
+    let keyboardWasVisible = false
+
+    const handleViewportResize = () => {
+      const currentHeight = getViewportHeight()
+      const activeElement = document.activeElement
+      const composerHasFocus = activeElement instanceof HTMLElement
+        && Boolean(composerRef.current?.contains(activeElement))
+
+      if (!composerHasFocus) {
+        restingHeight = currentHeight
+        keyboardWasVisible = false
+        return
+      }
+
+      const keyboardThreshold = Math.min(120, restingHeight * 0.22)
+      if (currentHeight < restingHeight - keyboardThreshold) {
+        keyboardWasVisible = true
+        return
+      }
+
+      if (keyboardWasVisible && currentHeight >= restingHeight - 48) {
+        keyboardWasVisible = false
+        activeElement.blur()
+        collapseComposer()
+      }
+    }
+
+    const resetRestingHeight = () => {
+      restingHeight = getViewportHeight()
+      keyboardWasVisible = false
+    }
+
+    resizeTarget.addEventListener('resize', handleViewportResize)
+    window.addEventListener('orientationchange', resetRestingHeight)
+    return () => {
+      resizeTarget.removeEventListener('resize', handleViewportResize)
+      window.removeEventListener('orientationchange', resetRestingHeight)
+    }
+  }, [collapseComposer])
 
   // Single debounce layer for draft saving
   useEffect(() => {
@@ -116,7 +171,18 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
   }
 
   return (
-    <aside className={`quick-input ${expanded ? 'is-expanded' : ''}`} aria-label="快速记录">
+    <aside
+      ref={composerRef}
+      className={`quick-input ${expanded ? 'is-expanded' : ''}`}
+      aria-label="快速记录"
+      onBlurCapture={() => {
+        requestAnimationFrame(() => {
+          if (!composerRef.current?.contains(document.activeElement)) {
+            collapseComposer()
+          }
+        })
+      }}
+    >
       <div className="quick-input-topline">
         <textarea
           ref={textareaRef}
