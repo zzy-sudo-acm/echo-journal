@@ -14,7 +14,7 @@ interface EntryState {
   loadToday: () => Promise<void>
   loadEntries: (query?: EntryQuery) => Promise<void>
   loadOnThisDay: (month: number, day: number) => Promise<void>
-  createEntry: (input: CreateEntryInput) => Promise<Entry>
+  createEntry: (input: CreateEntryInput, options?: { clearDraft?: boolean }) => Promise<Entry>
   updateEntry: (id: string, patch: UpdateEntryInput) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   restoreEntry: (id: string) => Promise<void>
@@ -71,11 +71,13 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     set({ onThisDayEntries: entries })
   },
 
-  createEntry: async (input: CreateEntryInput) => {
+  createEntry: async (input: CreateEntryInput, options) => {
     const entry = await entryRepo.create({ ...input, isDraft: false })
     await get().loadToday()
-    await draftRepo.clear()
-    set({ draft: null })
+    if (options?.clearDraft !== false) {
+      await draftRepo.clear()
+      set({ draft: null })
+    }
     return entry
   },
 

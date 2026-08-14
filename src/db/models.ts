@@ -1,7 +1,13 @@
+import type { JSONContent } from '@tiptap/core'
+
+/** Serializable Tiptap document stored with an entry. */
+export type RichContent = JSONContent
+
 export interface Entry {
   id: string
   title: string
   content: string
+  richContent?: RichContent
   tags: string[]
   createdAt: string // ISO 8601
   updatedAt: string // ISO 8601
@@ -12,6 +18,7 @@ export interface Entry {
 export interface CreateEntryInput {
   title?: string
   content: string
+  richContent?: RichContent
   tags?: string[]
   createdAt?: string
   isDraft?: boolean
@@ -20,6 +27,8 @@ export interface CreateEntryInput {
 export interface UpdateEntryInput {
   title?: string
   content?: string
+  /** Pass null to deliberately convert an entry back to plain text. */
+  richContent?: RichContent | null
   tags?: string[]
   createdAt?: string
   isDraft?: boolean
@@ -51,6 +60,34 @@ export interface Draft {
   savedAt: string
 }
 
+export interface JournalMedia {
+  id: string
+  blob: Blob
+  mimeType: string
+  width: number
+  height: number
+  fileName?: string
+  createdAt: string
+}
+
+export interface CreateJournalMediaInput {
+  id?: string
+  blob: Blob
+  mimeType: string
+  width: number
+  height: number
+  fileName?: string
+  createdAt?: string
+}
+
+export interface UpdateJournalMediaInput {
+  blob?: Blob
+  mimeType?: string
+  width?: number
+  height?: number
+  fileName?: string
+}
+
 export interface InternalSnapshot {
   id: string
   createdAt: string
@@ -58,7 +95,22 @@ export interface InternalSnapshot {
   tagCount: number
   size: number
   isPinned: boolean
+  /** Media retained by this snapshot. Optional for schema v1/v2 snapshots. */
+  mediaIds?: string[]
   data: string // JSON-serialized backup
+}
+
+/** Metadata stored in backup JSON; the binary itself lives at `path` in the ZIP. */
+export interface BackupMediaMetadata {
+  id: string
+  path: string
+  mimeType: string
+  width?: number
+  height?: number
+  byteSize: number
+  sha256: string
+  fileName?: string
+  createdAt?: string
 }
 
 export interface BackupManifest {
@@ -68,6 +120,8 @@ export interface BackupManifest {
   exportedAt: string
   entryCount: number
   tagCount: number
+  /** Absent only in legacy schema v1/v2 backups. */
+  mediaCount?: number
   earliestEntry: string | null
   latestEntry: string | null
   checksum: string
@@ -77,11 +131,21 @@ export interface BackupData {
   manifest: BackupManifest
   entries: Entry[]
   tags: string[]
+  /** Absent only in legacy schema v1/v2 backups. */
+  media?: BackupMediaMetadata[]
+}
+
+/** Fully parsed backup, including media binaries reconstructed from the archive. */
+export interface ParsedBackup {
+  data: BackupData
+  media: JournalMedia[]
+  checksumValid: boolean
 }
 
 export interface ExportPreview {
   entryCount: number
   tagCount: number
+  mediaCount: number
   activeEntryCount: number
   trashEntryCount: number
   earliestEntry: string | null
@@ -102,6 +166,6 @@ export interface ImportResult {
   totalEntries: number
 }
 
-export const SCHEMA_VERSION = 2
-export const APP_VERSION = '1.0.0'
+export const SCHEMA_VERSION = 3
+export const APP_VERSION = '1.1.0'
 export const APP_NAME = '回声日记'

@@ -1,7 +1,17 @@
 import { db } from './database'
-import type { Entry, CreateEntryInput, UpdateEntryInput, EntryQuery, TagInfo } from './models'
+import type {
+  Entry,
+  CreateEntryInput,
+  UpdateEntryInput,
+  EntryQuery,
+  TagInfo,
+  JournalMedia,
+  CreateJournalMediaInput,
+  UpdateJournalMediaInput,
+} from './models'
 import { v4 as uuidv4 } from './uuid'
 import { toLocalDate } from '../utils/date'
+import { collectMediaIds, extractPlainText } from '../services/richContent'
 
 function generateId(): string {
   return uuidv4()
@@ -9,6 +19,10 @@ function generateId(): string {
 
 function nowISO(): string {
   return new Date().toISOString()
+}
+
+function normalizeIds(ids: Iterable<string>): string[] {
+  return typeof ids === 'string' ? [ids] : [...ids]
 }
 
 /**
@@ -57,7 +71,8 @@ export const entryRepo = {
     const entry: Entry = {
       id: generateId(),
       title: input.title ?? '',
-      content: input.content,
+      content: input.richContent ? extractPlainText(input.richContent) : input.content,
+      ...(input.richContent ? { richContent: input.richContent } : {}),
       tags: input.tags || [],
       createdAt: input.createdAt || now,
       updatedAt: now,
@@ -75,15 +90,32 @@ export const entryRepo = {
     const existing = await db.entries.get(id)
     if (!existing) throw new Error(`Entry not found: ${id}`)
 
+    const hasRichContentPatch = patch.richContent !== undefined
+    const nextRichContent = hasRichContentPatch
+      ? (patch.richContent ?? undefined)
+      : existing.richContent
+
     const updated: Entry = {
       ...existing,
       title: patch.title !== undefined ? patch.title : existing.title,
-      content: patch.content ?? existing.content,
+      content:
+        hasRichContentPatch && nextRichContent
+          ? extractPlainText(nextRichContent)
+          : (patch.content ?? existing.content),
       tags: patch.tags ?? existing.tags,
       createdAt: patch.createdAt ?? existing.createdAt,
       isDraft: patch.isDraft ?? existing.isDraft,
       updatedAt: nowISO(),
     }
+    if (nextRichContent) updated.richContent = nextRichContent
+    else delete updated.richContent
+
+    const previousMediaIds = hasRichContentPatch
+      ? new Set(collectMediaIds(existing.richContent))
+      : null
+    const nextMediaIds = hasRichContentPatch
+      ? new Set(collectMediaIds(nextRichContent))
+      : null
     await db.entries.put(updated)
 
     // Refresh tag list
@@ -91,6 +123,11 @@ export const entryRepo = {
       for (const tag of patch.tags) {
         await db.tags.put({ name: tag })
       }
+    }
+
+    if (previousMediaIds && nextMediaIds) {
+      const removedMediaIds = [...previousMediaIds].filter((mediaId) => !nextMediaIds.has(mediaId))
+      if (removedMediaIds.length > 0) await cleanupOrphanMedia(removedMediaIds)
     }
     return updated
   },
@@ -123,16 +160,23 @@ export const entryRepo = {
 
   /** Permanently delete a single entry */
   async permanentDelete(id: string): Promise<void> {
+    const existing = await db.entries.get(id)
+    if (!existing) return
+    const candidateMediaIds = collectMediaIds(existing.richContent)
     await db.entries.delete(id)
+    if (candidateMediaIds.length > 0) await cleanupOrphanMedia(candidateMediaIds)
   },
 
   /** Permanently delete all non-draft soft-deleted entries in a single transaction */
   async emptyTrash(): Promise<void> {
-    await db.transaction('rw', db.entries, async () => {
-      await db.entries
-        .filter((e) => !e.isDraft && Boolean(e.deletedAt))
-        .delete()
+    const candidateMediaIds = await db.transaction('rw', db.entries, async () => {
+      const trashedEntries = await db.entries
+        .filter((entry) => !entry.isDraft && Boolean(entry.deletedAt))
+        .toArray()
+      await db.entries.bulkDelete(trashedEntries.map((entry) => entry.id))
+      return trashedEntries.flatMap((entry) => collectMediaIds(entry.richContent))
     })
+    if (candidateMediaIds.length > 0) await cleanupOrphanMedia(candidateMediaIds)
   },
 
   /** Count soft-deleted entries */
@@ -288,6 +332,172 @@ export const tagRepo = {
     await db.tags.delete(oldName)
     await db.tags.put({ name: newName })
   },
+}
+
+export const mediaRepo = {
+  async create(input: CreateJournalMediaInput): Promise<JournalMedia> {
+    const media: JournalMedia = {
+      id: input.id ?? generateId(),
+      blob: input.blob,
+      mimeType: input.mimeType || input.blob.type || 'application/octet-stream',
+      width: input.width,
+      height: input.height,
+      ...(input.fileName ? { fileName: input.fileName } : {}),
+      createdAt: input.createdAt ?? nowISO(),
+    }
+    await db.media.add(media)
+    return media
+  },
+
+  async update(id: string, patch: UpdateJournalMediaInput): Promise<JournalMedia> {
+    const existing = await db.media.get(id)
+    if (!existing) throw new Error(`Media not found: ${id}`)
+
+    const updated: JournalMedia = {
+      ...existing,
+      blob: patch.blob ?? existing.blob,
+      mimeType: patch.mimeType || patch.blob?.type || existing.mimeType,
+      width: patch.width ?? existing.width,
+      height: patch.height ?? existing.height,
+      ...(patch.fileName !== undefined ? { fileName: patch.fileName } : {}),
+    }
+    await db.media.put(updated)
+    return updated
+  },
+
+  async put(media: JournalMedia): Promise<JournalMedia> {
+    await db.media.put(media)
+    return media
+  },
+
+  async get(id: string): Promise<JournalMedia | null> {
+    return (await db.media.get(id)) ?? null
+  },
+
+  async getMany(ids: Iterable<string>): Promise<JournalMedia[]> {
+    const orderedIds = normalizeIds(ids)
+    if (orderedIds.length === 0) return []
+    const records = await db.media.bulkGet(orderedIds)
+    return records.filter((record): record is JournalMedia => Boolean(record))
+  },
+
+  async list(): Promise<JournalMedia[]> {
+    return db.media.orderBy('createdAt').toArray()
+  },
+
+  async count(): Promise<number> {
+    return db.media.count()
+  },
+
+  async delete(id: string): Promise<void> {
+    await db.media.delete(id)
+  },
+
+  async deleteMany(ids: Iterable<string>): Promise<void> {
+    const uniqueIds = [...new Set(normalizeIds(ids))]
+    if (uniqueIds.length > 0) await db.media.bulkDelete(uniqueIds)
+  },
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function collectUnknownRichContentMediaIds(value: unknown, references: Set<string>): void {
+  if (!isRecord(value)) return
+
+  if (isRecord(value.attrs)) {
+    const mediaId = value.attrs.mediaId
+    if (typeof mediaId === 'string' && mediaId) references.add(mediaId)
+  }
+
+  if (Array.isArray(value.content)) {
+    for (const child of value.content) collectUnknownRichContentMediaIds(child, references)
+  }
+}
+
+/**
+ * Add media roots held by a snapshot. New snapshots expose `mediaIds`; older
+ * snapshots are inspected through their serialized backup data.
+ */
+function collectSnapshotMediaIds(
+  snapshot: { mediaIds?: string[]; data: string },
+  references: Set<string>,
+): boolean {
+  if (Array.isArray(snapshot.mediaIds)) {
+    for (const mediaId of snapshot.mediaIds) {
+      if (typeof mediaId === 'string' && mediaId) references.add(mediaId)
+    }
+    return true
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(snapshot.data) as unknown
+  } catch {
+    return false
+  }
+
+  if (!isRecord(parsed)) return false
+  const payload = isRecord(parsed.data) ? parsed.data : parsed
+  if (!Array.isArray(payload.entries)) return false
+
+  for (const rawEntry of payload.entries) {
+    if (isRecord(rawEntry)) {
+      collectUnknownRichContentMediaIds(rawEntry.richContent, references)
+    }
+  }
+
+  if (Array.isArray(payload.media)) {
+    for (const rawMedia of payload.media) {
+      if (isRecord(rawMedia) && typeof rawMedia.id === 'string' && rawMedia.id) {
+        references.add(rawMedia.id)
+      }
+    }
+  }
+
+  return true
+}
+
+/**
+ * Delete only media proven to be unreferenced by every entry and snapshot.
+ * Supplying candidates makes post-save and permanent-delete cleanup cheap and
+ * prevents unrelated media from being touched.
+ */
+export async function cleanupOrphanMedia(candidateIds?: Iterable<string>): Promise<number> {
+  const normalizedCandidates = candidateIds === undefined
+    ? null
+    : [...new Set(normalizeIds(candidateIds).filter((mediaId) => mediaId))]
+  if (normalizedCandidates?.length === 0) return 0
+
+  return db.transaction('rw', [db.entries, db.snapshots, db.media], async () => {
+    const entries = await db.entries.toArray()
+    const snapshots = await db.snapshots.toArray()
+    const candidates = normalizedCandidates
+      ? (await db.media.bulkGet(normalizedCandidates)).filter(
+          (record): record is JournalMedia => Boolean(record),
+        )
+      : await db.media.toArray()
+
+    if (candidates.length === 0) return 0
+
+    const referencedIds = new Set<string>()
+    for (const entry of entries) {
+      for (const mediaId of collectMediaIds(entry.richContent)) referencedIds.add(mediaId)
+    }
+
+    for (const snapshot of snapshots) {
+      // If an old/corrupt snapshot cannot be inspected, keeping candidates is
+      // safer than irreversibly deleting a Blob that snapshot might restore.
+      if (!collectSnapshotMediaIds(snapshot, referencedIds)) return 0
+    }
+
+    const orphanIds = candidates
+      .map((media) => media.id)
+      .filter((mediaId) => !referencedIds.has(mediaId))
+    if (orphanIds.length > 0) await db.media.bulkDelete(orphanIds)
+    return orphanIds.length
+  })
 }
 
 export const settingsRepo = {

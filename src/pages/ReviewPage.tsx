@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { entryRepo } from '../db/repository'
 import { EntryCard } from '../components/EntryCard'
-import { EntryEditor } from '../components/EntryEditor'
+import { LazyEntryEditor } from '../components/LazyEntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useEntryStore } from '../store/entryStore'
 import { useToast } from '../components/ToastContext'
@@ -43,7 +43,6 @@ export function ReviewPage() {
     if (!editingEntry) return
     try {
       await updateEntry(editingEntry.id, input)
-      setEditingEntry(null)
       void loadReview().catch(() => { /* refresh is best-effort */ })
       showToast('日记已更新', 'success')
     } catch {
@@ -93,7 +92,7 @@ export function ReviewPage() {
           {yearEntries.map((entry) => <EntryCard key={entry.id} entry={entry} onEdit={setEditingEntry} onDelete={setDeletingEntry} onCopied={() => showToast('已复制到剪贴板', 'success')} />)}
         </Fragment>
       ))}
-      {editingEntry ? <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
+      {editingEntry ? <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
       {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger confirming={deleting} onConfirm={() => void handleDelete()} onCancel={() => { if (!deleting) setDeletingEntry(null) }} /> : null}
     </main>
   )

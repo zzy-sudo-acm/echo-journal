@@ -104,3 +104,43 @@ export function TagIcon(props: IconProps) {
 export function MoreIcon(props: IconProps) {
   return <svg {...iconProps(props)}><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></svg>
 }
+
+export function ParagraphIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M14.5 5H10a4 4 0 0 0 0 8h4.5M14.5 5v14M10.5 13v6" /></svg>
+}
+
+export function BoldIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M7.5 5h5a3.5 3.5 0 0 1 0 7h-5zM7.5 12h5.7a3.5 3.5 0 0 1 0 7H7.5z" /></svg>
+}
+
+export function ItalicIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M10 5h7M7 19h7M14.5 5l-5 14" /></svg>
+}
+
+export function QuoteIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M5 11h5v7H4v-5.5A6.5 6.5 0 0 1 10.5 6M14 11h5v7h-6v-5.5A6.5 6.5 0 0 1 19.5 6" /></svg>
+}
+
+export function BulletListIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><circle cx="5" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="5" cy="17" r="1" fill="currentColor" stroke="none" /><path d="M9 7h10M9 12h10M9 17h10" /></svg>
+}
+
+export function OrderedListIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M4 6h1v3M4 9h2M4 12.5c.3-.6.8-.9 1.3-.9.7 0 1.2.4 1.2 1 0 1-2.5 1.8-2.5 3h2.7M10 7h9M10 13h9M10 18h9" /></svg>
+}
+
+export function HorizontalRuleIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="M4 12h16" /></svg>
+}
+
+export function ImageIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="8.5" cy="9" r="1.5" /><path d="m5.5 17 4.2-4.2 3.1 3.1 2.2-2.2 3.5 3.3" /></svg>
+}
+
+export function UndoIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="m9 8-4 4 4 4M5 12h7.5a5.5 5.5 0 0 1 5.5 5.5" /></svg>
+}
+
+export function RedoIcon(props: IconProps) {
+  return <svg {...iconProps(props)}><path d="m15 8 4 4-4 4M19 12h-7.5A5.5 5.5 0 0 0 6 17.5" /></svg>
+}

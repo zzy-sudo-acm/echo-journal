@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
-import { FOCUS_QUICK_INPUT_EVENT } from '../utils/events'
+import { OPEN_FULL_EDITOR_EVENT } from '../utils/events'
 import { MoonIcon, SunIcon } from './Icons'
 
 const desktopNavigation = [
@@ -52,17 +52,20 @@ export function AppHeader() {
     }, { once: true })
   }
 
+  const openFullEditor = () => window.dispatchEvent(new Event(OPEN_FULL_EDITOR_EVENT))
+
   const handleDesktopWritingClick = (event: MouseEvent<HTMLButtonElement>) => {
     playDesktopNavigationFeedback(event.currentTarget)
     if (pathname !== '/') {
       navigate('/')
+      if (writingFocusTimerRef.current !== null) window.clearTimeout(writingFocusTimerRef.current)
+      writingFocusTimerRef.current = window.setTimeout(() => {
+        writingFocusTimerRef.current = null
+        openFullEditor()
+      }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 32 : 300)
       return
     }
-
-    window.scrollTo({
-      top: 0,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-    })
+    openFullEditor()
   }
 
   const handleWritingClick = () => {
@@ -80,9 +83,8 @@ export function AppHeader() {
       ) ?? null
     }
 
-    const focusQuickInput = () => window.dispatchEvent(new Event(FOCUS_QUICK_INPUT_EVENT))
     if (pathname === '/') {
-      if (writingFocusTimerRef.current === null) focusQuickInput()
+      if (writingFocusTimerRef.current === null) openFullEditor()
       return
     }
 
@@ -90,7 +92,7 @@ export function AppHeader() {
     navigate('/')
     writingFocusTimerRef.current = window.setTimeout(() => {
       writingFocusTimerRef.current = null
-      focusQuickInput()
+      openFullEditor()
     }, reducedMotion ? 32 : 300)
   }
 

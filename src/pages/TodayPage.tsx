@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
 import { QuickInput } from '../components/QuickInput'
-import { FOCUS_QUICK_INPUT_EVENT } from '../utils/events'
+import { OPEN_FULL_EDITOR_EVENT } from '../utils/events'
 import { TimelineIntro } from '../components/TimelineIntro'
 import { TimelineDayGroup, type TimelineDayVariant } from '../components/TimelineDayGroup'
-import { EntryEditor } from '../components/EntryEditor'
+import { LazyEntryEditor } from '../components/LazyEntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
 import { formatLocalDateString, getLocalDateString, parseLocalDateString, toLocalDate } from '../utils/date'
@@ -25,12 +25,12 @@ function formatDateLabel(dateString: string) {
 }
 
 export function TodayPage() {
-  const { entries, loadEntries, updateEntry, deleteEntry, restoreEntry } = useEntryStore()
+  const { entries, loadEntries, createEntry, updateEntry, deleteEntry, restoreEntry } = useEntryStore()
+  const [creatingEntry, setCreatingEntry] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
   const { showToast } = useToast()
   const positioned = useRef(false)
-  const [composerFocusRequest, setComposerFocusRequest] = useState(0)
 
   const refreshTimeline = useCallback(async () => {
     await loadEntries({ orderBy: 'createdAt', orderDir: 'asc' })
@@ -62,18 +62,10 @@ export function TodayPage() {
   }, [entries, today])
 
   useEffect(() => {
-    const focusComposer = () => {
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      document.getElementById(`day-${today}`)?.scrollIntoView({
-        behavior: reducedMotion ? 'auto' : 'smooth',
-        block: 'start',
-      })
-      requestAnimationFrame(() => setComposerFocusRequest((request) => request + 1))
-    }
-
-    window.addEventListener(FOCUS_QUICK_INPUT_EVENT, focusComposer)
-    return () => window.removeEventListener(FOCUS_QUICK_INPUT_EVENT, focusComposer)
-  }, [today])
+    const openFullEditor = () => setCreatingEntry(true)
+    window.addEventListener(OPEN_FULL_EDITOR_EVENT, openFullEditor)
+    return () => window.removeEventListener(OPEN_FULL_EDITOR_EVENT, openFullEditor)
+  }, [])
 
   useEffect(() => {
     if (positioned.current || entries.length === 0) return
@@ -88,6 +80,12 @@ export function TodayPage() {
     await updateEntry(editingEntry.id, input)
     await refreshTimeline()
     showToast('日记已更新', 'success')
+  }
+
+  const handleCreate = async (input: CreateEntryInput) => {
+    await createEntry(input, { clearDraft: false })
+    await refreshTimeline()
+    showToast('日记已记下', 'success')
   }
 
   const handleDelete = async () => {
@@ -128,14 +126,18 @@ export function TodayPage() {
               onDelete={setDeletingEntry}
               onCopied={() => showToast('已复制到剪贴板', 'success')}
             >
-              {variant === 'today' ? <QuickInput onSaved={refreshTimeline} focusRequest={composerFocusRequest} /> : null}
+              {variant === 'today' ? <QuickInput onSaved={refreshTimeline} /> : null}
             </TimelineDayGroup>
           )
         })}
       </div>
 
       {editingEntry ? (
-        <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} />
+        <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} />
+      ) : null}
+
+      {creatingEntry ? (
+        <LazyEntryEditor onSave={handleCreate} onClose={() => setCreatingEntry(false)} />
       ) : null}
 
       {deletingEntry ? (

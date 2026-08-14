@@ -9,7 +9,8 @@ import {
 } from '../services/search'
 import type { TagInfo, Entry, CreateEntryInput } from '../db/models'
 import { CalendarIcon, SearchIcon, TagIcon, XIcon } from '../components/Icons'
-import { EntryEditor } from '../components/EntryEditor'
+import { LazyEntryEditor } from '../components/LazyEntryEditor'
+import { JournalRenderer } from '../components/rich-text/JournalRenderer'
 import { SearchDateFilterPanel } from '../components/SearchDateFilter'
 import { useEntryStore } from '../store/entryStore'
 import { useToast } from '../components/ToastContext'
@@ -130,7 +131,6 @@ export function SearchPage() {
     setResults(nextResults)
     setTags(nextTags)
     setDatesWithEntries(new Set(dates))
-    setEditingEntry(null)
     showToast('日记已更新', 'success')
   }
 
@@ -290,13 +290,17 @@ export function SearchPage() {
           <article className="modal entry-detail" role="dialog" aria-modal="true" aria-label="日记详情" onClick={(event) => event.stopPropagation()}>
             <header className="modal-header"><time>{new Date(viewingEntry.createdAt).toLocaleString('zh-CN')}</time><button type="button" className="icon-button" aria-label="关闭详情" onClick={() => setViewingEntry(null)}><XIcon /></button></header>
             {viewingEntry.title ? <h2>{viewingEntry.title}</h2> : null}
-            <p>{viewingEntry.content}</p>
+            {viewingEntry.richContent ? (
+              <JournalRenderer content={viewingEntry.richContent} className="entry-detail-content" />
+            ) : (
+              <p>{viewingEntry.content}</p>
+            )}
             {viewingEntry.tags.length ? <div className="entry-tags">{viewingEntry.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div> : null}
             <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setViewingEntry(null)}>关闭</button><button type="button" className="btn btn-primary" onClick={() => { setEditingEntry(viewingEntry); setViewingEntry(null) }}>编辑</button></div>
           </article>
         </div>
       ) : null}
-      {editingEntry ? <EntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
+      {editingEntry ? <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
     </main>
   )
 }

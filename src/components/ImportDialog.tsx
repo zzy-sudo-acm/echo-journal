@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import type { BackupData, ExportPreview, ImportResult } from '../db/models'
+import type { ExportPreview, ImportResult, ParsedBackup } from '../db/models'
+import { SCHEMA_VERSION } from '../db/models'
 import { parseImportFile, previewBackup, mergeImportWithRollback, replaceImportWithRollback, createRollbackSnapshot } from '../services/backup'
 import { XIcon, UploadIcon } from './Icons'
 import { useToast } from './ToastContext'
@@ -10,85 +11,103 @@ type Stage = 'select' | 'preview' | 'mode' | 'confirmReplace' | 'result'
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [stage, setStage] = useState<Stage>('select')
   const [preview, setPreview] = useState<ExportPreview | null>(null)
-  const [backupData, setBackupData] = useState<BackupData | null>(null)
+  const [parsedBackup, setParsedBackup] = useState<ParsedBackup | null>(null)
+  const [parsing, setParsing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const { showToast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
+  const importingRef = useRef(false)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const parseResult = await parseImportFile(file)
-    if ('error' in parseResult) {
-      setErrorMessage(parseResult.error)
-      showToast(parseResult.error, 'error')
-      return
-    }
+    setParsing(true)
+    try {
+      const parseResult = await parseImportFile(file)
+      if ('error' in parseResult) {
+        setParsedBackup(null)
+        setPreview(null)
+        setErrorMessage(parseResult.error)
+        showToast(parseResult.error, 'error')
+        return
+      }
 
-    const { data } = parseResult.result
-    const p = previewBackup(data)
-    setBackupData(data)
-    setPreview(p)
-    setErrorMessage(null)
-    setStage('preview')
+      setParsedBackup(parseResult.result)
+      setPreview(previewBackup(parseResult.result.data))
+      setErrorMessage(null)
+      setStage('preview')
+    } finally {
+      setParsing(false)
+      e.target.value = ''
+    }
   }
 
   const handleMerge = async () => {
-    if (!backupData) return
+    if (!parsedBackup || importingRef.current) return
+    importingRef.current = true
     setImporting(true)
     try {
       // Create rollback snapshot before merge
       const snapshotId = await createRollbackSnapshot()
-      const r = await mergeImportWithRollback(backupData, snapshotId)
+      const r = await mergeImportWithRollback(parsedBackup, snapshotId)
       setResult(r)
       setStage('result')
       if (r.conflicts > 0) {
-        showToast(`合并完成：${r.added} 条新增，${r.conflicts} 条冲突已保留两份`, 'success')
+        showToast(`合并完成：${r.added} 条新增，${r.conflicts} 条冲突已安全处理`, 'success')
       } else {
         showToast(`合并完成：${r.added} 条新增，${r.updated} 条更新`, 'success')
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : '导入失败，数据已保留原状', 'error')
     } finally {
+      importingRef.current = false
       setImporting(false)
     }
   }
 
   const handleReplaceConfirm = () => {
+    if (importing) return
     setStage('confirmReplace')
   }
 
   const handleReplace = async () => {
-    if (!backupData) return
+    if (!parsedBackup || importingRef.current) return
+    importingRef.current = true
     setImporting(true)
     try {
       const snapshotId = await createRollbackSnapshot()
-      await replaceImportWithRollback(backupData, snapshotId)
+      await replaceImportWithRollback(parsedBackup, snapshotId)
       setResult({
-        added: backupData.entries.length,
+        added: parsedBackup.data.entries.length,
         skipped: 0,
         updated: 0,
         conflicts: 0,
-        totalEntries: backupData.entries.length,
+        totalEntries: parsedBackup.data.entries.length,
       })
       setStage('result')
       showToast('数据替换完成', 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : '替换失败，数据已自动回滚', 'error')
     } finally {
+      importingRef.current = false
       setImporting(false)
     }
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={() => {
+        if (!importing && !parsing) onClose()
+      }}
+    >
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 className="modal-title" style={{ margin: 0 }}>导入备份</h2>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }} disabled={importing || parsing}>
             <XIcon />
           </button>
         </div>
@@ -114,8 +133,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
-            <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>
-              选择文件
+            <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={parsing}>
+              {parsing ? '正在校验备份…' : '选择文件'}
             </button>
           </div>
         )}
@@ -136,6 +155,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 <span>{preview.tagCount} 个</span>
               </div>
               <div className="preview-row">
+                <span className="preview-label">图片数量</span>
+                <span>{preview.mediaCount} 张</span>
+              </div>
+              <div className="preview-row">
                 <span className="preview-label">时间范围</span>
                 <span>
                   {preview.earliestEntry
@@ -145,7 +168,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="preview-row">
                 <span className="preview-label">数据版本</span>
-                <span>v{preview.schemaVersion}（当前 v1）</span>
+                <span>v{preview.schemaVersion}（当前 v{SCHEMA_VERSION}）</span>
               </div>
               <div className="preview-row">
                 <span className="preview-label">校验状态</span>
@@ -169,7 +192,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
             {preview.isValid ? (
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={() => { setStage('select'); setBackupData(null); setPreview(null) }}>
+                <button className="btn btn-secondary" onClick={() => { setStage('select'); setParsedBackup(null); setPreview(null) }}>
                   重新选择
                 </button>
                 <button className="btn btn-primary" onClick={() => setStage('mode')}>
@@ -190,7 +213,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               选择导入方式。系统会在导入前自动创建安全快照，失败时自动回滚。
             </p>
 
-            <div className="preview-card" style={{ cursor: 'pointer' }} onClick={handleMerge}>
+            <div className="preview-card" style={{ cursor: importing ? 'default' : 'pointer' }} onClick={handleMerge}>
               <h3>合并数据</h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 4 }}>
                 将备份中的日记合并到当前数据。重复记录自动跳过，更新记录按时间保留最新版，
@@ -198,7 +221,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               </p>
             </div>
 
-            <div className="preview-card" style={{ cursor: 'pointer', border: '1px solid var(--danger)' }} onClick={handleReplaceConfirm}>
+            <div className="preview-card" style={{ cursor: importing ? 'default' : 'pointer', border: '1px solid var(--danger)' }} onClick={handleReplaceConfirm}>
               <h3 style={{ color: 'var(--danger)' }}>替换当前数据</h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 4 }}>
                 清空当前所有日记并用备份数据替换。系统会自动备份当前内容，失败时自动回滚。
@@ -208,7 +231,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             {importing && <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>处理中…</p>}
 
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setStage('preview')}>
+              <button className="btn btn-secondary" onClick={() => setStage('preview')} disabled={importing}>
                 返回
               </button>
             </div>
@@ -231,7 +254,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 <span>{result.updated} 条</span>
               </div>
               <div className="preview-row">
-                <span className="preview-label">冲突（已保留两份）</span>
+                <span className="preview-label">冲突（已安全处理）</span>
                 <span style={{ color: result.conflicts > 0 ? 'var(--danger)' : undefined }}>
                   {result.conflicts} 条
                 </span>
@@ -249,11 +272,11 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
         {stage === 'confirmReplace' && (
           <ConfirmDialog
-            message={`确定要用备份数据（${preview?.entryCount ?? 0} 条日记）替换当前所有日记吗？当前数据将先被自动备份。替换失败时自动回滚。`}
+            message={`确定要用备份数据（${preview?.entryCount ?? 0} 条日记、${preview?.mediaCount ?? 0} 张图片）替换当前所有日记吗？当前数据将先被自动备份。替换失败时自动回滚。`}
             confirmLabel="确认替换"
             danger
             onConfirm={() => { handleReplace() }}
-            onCancel={() => setStage('mode')}
+            onCancel={() => { if (!importing) setStage('mode') }}
           />
         )}
       </div>

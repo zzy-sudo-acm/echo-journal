@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Entry } from '../db/models'
 import { CopyIcon, EditIcon, MoreIcon, TrashIcon, XIcon } from './Icons'
+import { JournalRenderer } from './rich-text/JournalRenderer'
 
 interface EntryCardProps {
   entry: Entry
@@ -25,6 +26,7 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
     hour12: false,
   })
   const isLong = entry.content.length > LONG_ENTRY_LENGTH
+  const showRichContent = Boolean(entry.richContent) && (!isLong || expanded)
 
   const clearLongPressTimer = () => {
     if (longPressTimer.current) {
@@ -97,8 +99,12 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
       <div className="entry-time">{time}</div>
       <div className="entry-main">
         {entry.title ? <h3 className="entry-title">{entry.title}</h3> : null}
-        <div className={`entry-content ${isLong && !expanded ? 'is-collapsed' : ''}`}>
-          {entry.content}
+        <div className={`entry-content ${showRichContent ? 'has-rich-content' : ''} ${isLong && !expanded ? 'is-collapsed' : ''}`}>
+          {showRichContent && entry.richContent ? (
+            <JournalRenderer content={entry.richContent} />
+          ) : (
+            entry.content
+          )}
         </div>
         {isLong ? (
           <button

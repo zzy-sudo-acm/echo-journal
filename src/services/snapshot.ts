@@ -1,47 +1,117 @@
 import { db } from '../db/database'
+import type { BackupData, InternalSnapshot } from '../db/models'
+import { cleanupOrphanMedia } from '../db/repository'
+import { v4 as uuidv4 } from '../db/uuid'
+import { getLocalDateString, toLocalDate } from '../utils/date'
 import { generateBackupData } from './backup'
-import { validateBackupData } from './validation'
-import { getLocalDateString } from '../utils/date'
-import type { InternalSnapshot, BackupData } from '../db/models'
+import { collectMediaIds } from './richContent'
+import { validateBackupData, verifyChecksum } from './validation'
 
 const MAX_SNAPSHOTS = 7
+
+function referencedMediaIds(data: BackupData): string[] {
+  const ids = new Set<string>()
+  for (const entry of data.entries) {
+    for (const mediaId of collectMediaIds(entry.richContent)) ids.add(mediaId)
+  }
+  return [...ids]
+}
+
+function reserveUuid(reservedIds: Set<string>): string {
+  let id = uuidv4()
+  while (reservedIds.has(id)) id = uuidv4()
+  reservedIds.add(id)
+  return id
+}
+
+async function replaceSavedEntriesPreservingDrafts(entries: BackupData['entries']): Promise<void> {
+  const drafts = await db.entries.filter((entry) => entry.isDraft).toArray()
+  const occupiedIds = new Set(drafts.map((entry) => entry.id))
+  const reservedIds = new Set([...occupiedIds, ...entries.map((entry) => entry.id)])
+
+  await db.entries.filter((entry) => !entry.isDraft).delete()
+  for (const entry of entries) {
+    const restoredEntry = occupiedIds.has(entry.id)
+      ? { ...entry, id: reserveUuid(reservedIds) }
+      : entry
+    await db.entries.add(restoredEntry)
+    occupiedIds.add(restoredEntry.id)
+  }
+}
+
+function mediaIdsFromSnapshot(snapshot: InternalSnapshot): string[] {
+  if (snapshot.mediaIds) return snapshot.mediaIds
+  try {
+    return referencedMediaIds(JSON.parse(snapshot.data) as BackupData)
+  } catch {
+    return []
+  }
+}
+
+async function ensureMediaAvailable(mediaIds: Iterable<string>, context: string): Promise<void> {
+  const ids = [...new Set(mediaIds)]
+  if (ids.length === 0) return
+  const records = await db.media.bulkGet(ids)
+  const missing = ids.filter((_, index) => !records[index])
+  if (missing.length > 0) {
+    throw new Error(`${context}引用的图片不存在: ${missing.join(', ')}`)
+  }
+}
+
+async function cleanupMediaBestEffort(mediaIds: Iterable<string>): Promise<void> {
+  const candidates = [...new Set(mediaIds)]
+  if (candidates.length === 0) return
+  try {
+    await cleanupOrphanMedia(candidates)
+  } catch (error) {
+    console.warn('Snapshot media cleanup failed:', error)
+  }
+}
+
+function parseAndValidateSnapshot(snapshot: InternalSnapshot, label: string): BackupData {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(snapshot.data) as unknown
+  } catch {
+    throw new Error(`${label}数据无法解析`)
+  }
+
+  const validation = validateBackupData(parsed)
+  if ('error' in validation) throw new Error(`${label}数据校验失败: ${validation.error}`)
+  const checksum = verifyChecksum(validation.data)
+  if (!checksum.valid) throw new Error(`${label}校验和不匹配`)
+  return validation.data
+}
 
 // ──────────────────────── Daily Snapshots ────────────────────────
 
 export async function createDailySnapshot(): Promise<InternalSnapshot | null> {
-  // Use LOCAL date, not UTC
   const today = getLocalDateString()
-
-  // Check if we already have a snapshot for today
   const existing = await db.snapshots
-    .filter((s) => s.createdAt.startsWith(today))
+    .filter(
+      (snapshot) => snapshot.id.startsWith('snap-') && toLocalDate(snapshot.createdAt) === today,
+    )
     .first()
-
   if (existing) return null
 
   const data = await generateBackupData()
-
-  // Validate the snapshot data can be parsed back
-  const jsonStr = JSON.stringify(data)
-  const reparsed = JSON.parse(jsonStr) as unknown
-  const validateResult = validateBackupData(reparsed)
-  if ('error' in validateResult) {
-    throw new Error(`快照验证失败：${validateResult.error}`)
-  }
-
-  // Verify entry count consistency
-  if (validateResult.data.manifest.entryCount !== data.entries.length) {
+  const json = JSON.stringify(data)
+  const validation = validateBackupData(JSON.parse(json) as unknown)
+  if ('error' in validation) throw new Error(`快照验证失败：${validation.error}`)
+  if (!verifyChecksum(validation.data).valid) throw new Error('快照验证失败：校验和不匹配')
+  if (validation.data.manifest.entryCount !== data.entries.length) {
     throw new Error('快照验证失败：日记数量不匹配')
   }
 
   const snapshot: InternalSnapshot = {
-    id: `snap-${today}-${Date.now()}`,
+    id: `snap-${today}-${Date.now()}-${uuidv4()}`,
     createdAt: new Date().toISOString(),
     entryCount: data.manifest.entryCount,
     tagCount: data.manifest.tagCount,
-    size: jsonStr.length,
+    size: json.length,
     isPinned: false,
-    data: jsonStr,
+    mediaIds: referencedMediaIds(data),
+    data: json,
   }
 
   await db.snapshots.put(snapshot)
@@ -50,21 +120,17 @@ export async function createDailySnapshot(): Promise<InternalSnapshot | null> {
 
 export async function cleanupOldSnapshots(): Promise<void> {
   const all = await db.snapshots.toArray()
-
-  // Separate unpinned (pinned snapshots are never auto-deleted)
   const unpinned = all
-    .filter((s) => !s.isPinned)
+    .filter((snapshot) => !snapshot.isPinned)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-  // Keep only the last MAX_SNAPSHOTS unpinned snapshots
   const toDelete = unpinned.slice(MAX_SNAPSHOTS)
+  const cleanupCandidates = new Set<string>()
 
-  for (const snap of toDelete) {
-    const remaining = unpinned.filter((s) => !toDelete.find((d) => d.id === s.id))
-    if (remaining.length >= MAX_SNAPSHOTS) {
-      await db.snapshots.delete(snap.id)
-    }
+  for (const snapshot of toDelete) {
+    for (const mediaId of mediaIdsFromSnapshot(snapshot)) cleanupCandidates.add(mediaId)
+    await db.snapshots.delete(snapshot.id)
   }
+  await cleanupMediaBestEffort(cleanupCandidates)
 }
 
 export async function getSnapshots(): Promise<InternalSnapshot[]> {
@@ -72,119 +138,105 @@ export async function getSnapshots(): Promise<InternalSnapshot[]> {
 }
 
 export async function pinSnapshot(id: string): Promise<void> {
-  const snap = await db.snapshots.get(id)
-  if (snap) {
-    snap.isPinned = !snap.isPinned
-    await db.snapshots.put(snap)
-  }
+  const snapshot = await db.snapshots.get(id)
+  if (!snapshot) return
+  snapshot.isPinned = !snapshot.isPinned
+  await db.snapshots.put(snapshot)
 }
 
 export async function deleteSnapshot(id: string): Promise<void> {
+  const snapshot = await db.snapshots.get(id)
+  if (!snapshot) return
+  const cleanupCandidates = mediaIdsFromSnapshot(snapshot)
   await db.snapshots.delete(id)
+  await cleanupMediaBestEffort(cleanupCandidates)
 }
 
 // ──────────────────────── Restore from Snapshot ────────────────────────
 
-/**
- * Restore from an internal snapshot WITH safety guarantees:
- *
- * 1. Validate the snapshot data before touching anything
- * 2. Create a rollback snapshot of current data
- * 3. Execute restore within a transaction
- * 4. On failure → auto-rollback via transaction + restore safety snapshot
- * 5. On success → clean up safety snapshot
- */
+/** Restore entries/tags while reusing the media Blob records retained by snapshots. */
 export async function restoreFromSnapshot(snapshotId: string): Promise<void> {
-  // Step 1: Validate snapshot exists and is parsable
-  const snap = await db.snapshots.get(snapshotId)
-  if (!snap) throw new Error('快照不存在')
+  const snapshot = await db.snapshots.get(snapshotId)
+  if (!snapshot) throw new Error('快照不存在')
 
-  let snapshotData: BackupData
-  try {
-    const parsed = JSON.parse(snap.data) as unknown
-    const validateResult = validateBackupData(parsed)
-    if ('error' in validateResult) {
-      throw new Error(`快照数据校验失败: ${validateResult.error}`)
-    }
-    snapshotData = validateResult.data
-  } catch (err) {
-    if (err instanceof Error && err.message.startsWith('快照数据校验失败')) {
-      throw err
-    }
-    throw new Error('快照数据无法解析')
-  }
+  const snapshotData = parseAndValidateSnapshot(snapshot, '快照')
+  const requiredMedia = new Set([
+    ...(snapshot.mediaIds ?? []),
+    ...referencedMediaIds(snapshotData),
+  ])
+  await ensureMediaAvailable(requiredMedia, '快照')
 
-  // Step 2: Create safety snapshot of CURRENT data
-  const safetySnapshotId = `safety-before-restore-${Date.now()}`
+  const safetySnapshotId = `safety-before-restore-${Date.now()}-${uuidv4()}`
+  let safetySnapshot: InternalSnapshot
   try {
     const currentData = await generateBackupData()
-    await db.snapshots.put({
+    const serialized = JSON.stringify(currentData)
+    safetySnapshot = {
       id: safetySnapshotId,
       createdAt: new Date().toISOString(),
       entryCount: currentData.manifest.entryCount,
       tagCount: currentData.manifest.tagCount,
-      size: JSON.stringify(currentData).length,
+      size: serialized.length,
       isPinned: true,
-      data: JSON.stringify(currentData),
-    })
-  } catch (err) {
-    throw new Error(`无法创建安全快照: ${err instanceof Error ? err.message : err}`)
+      mediaIds: referencedMediaIds(currentData),
+      data: serialized,
+    }
+    await db.snapshots.put(safetySnapshot)
+  } catch (error) {
+    throw new Error(`无法创建安全快照: ${error instanceof Error ? error.message : error}`)
   }
 
-  // Step 3: Execute restore within a transaction
   try {
     await db.transaction('rw', [db.entries, db.tags], async () => {
-      // Clear all entries
-      await db.entries.filter(() => true).delete()
-      // Import snapshot entries
-      for (const entry of snapshotData.entries) {
-        await db.entries.put(entry)
-      }
-      // Replace tags
+      await replaceSavedEntriesPreservingDrafts(snapshotData.entries)
       await db.tags.clear()
-      for (const tag of snapshotData.tags || []) {
-        await db.tags.put({ name: tag })
-      }
+      for (const tag of snapshotData.tags) await db.tags.put({ name: tag })
     })
 
-    // Step 4: Post-restore validation (count all non-draft entries including soft-deleted)
-    const currentCount = await db.entries.filter((e) => !e.isDraft).count()
+    const currentCount = await db.entries.filter((entry) => !entry.isDraft).count()
     if (currentCount !== snapshotData.manifest.entryCount) {
       throw new Error(
         `恢复后验证失败: 期望 ${snapshotData.manifest.entryCount} 条，实际 ${currentCount} 条`,
       )
     }
 
-    // Step 5: Success — cleanup safety snapshot
+    let safetySnapshotDeleted = false
     try {
       await db.snapshots.delete(safetySnapshotId)
-    } catch {
-      // Best-effort cleanup
+      safetySnapshotDeleted = true
+    } catch (error) {
+      console.warn('Safety snapshot cleanup failed:', error)
     }
-  } catch (restoreErr) {
-    // Step 6: Failure — restore from safety snapshot
-    console.error('Snapshot restore failed:', restoreErr instanceof Error ? restoreErr.message : restoreErr)
+    if (safetySnapshotDeleted) {
+      await cleanupMediaBestEffort(safetySnapshot.mediaIds ?? [])
+    }
+  } catch (restoreError) {
+    console.error('Snapshot restore failed:', restoreError)
 
     try {
-      const safetySnap = await db.snapshots.get(safetySnapshotId)
-      if (safetySnap) {
-        const safetyData = JSON.parse(safetySnap.data) as BackupData
-        await db.transaction('rw', [db.entries, db.tags], async () => {
-          await db.entries.filter(() => true).delete()
-          for (const entry of safetyData.entries) {
-            await db.entries.put(entry)
-          }
-          await db.tags.clear()
-          for (const tag of safetyData.tags || []) {
-            await db.tags.put({ name: tag })
-          }
-        })
-      }
-    } catch (rollbackErr) {
-      console.error('CRITICAL: safety rollback also failed!', rollbackErr)
-      throw new Error(`快照恢复失败且安全回滚也失败。请尝试从设置页面手动导入备份。错误: ${restoreErr instanceof Error ? restoreErr.message : restoreErr}`)
+      const storedSafetySnapshot = await db.snapshots.get(safetySnapshotId)
+      if (!storedSafetySnapshot) throw new Error('安全快照不存在')
+      const safetyData = parseAndValidateSnapshot(storedSafetySnapshot, '安全快照')
+      const safetyMedia = new Set([
+        ...(storedSafetySnapshot.mediaIds ?? []),
+        ...referencedMediaIds(safetyData),
+      ])
+      await ensureMediaAvailable(safetyMedia, '安全快照')
+
+      await db.transaction('rw', [db.entries, db.tags], async () => {
+        await replaceSavedEntriesPreservingDrafts(safetyData.entries)
+        await db.tags.clear()
+        for (const tag of safetyData.tags) await db.tags.put({ name: tag })
+      })
+    } catch (rollbackError) {
+      console.error('CRITICAL: safety rollback also failed!', rollbackError)
+      throw new Error(
+        `快照恢复失败且安全回滚也失败。请尝试从设置页面手动导入备份。错误: ${restoreError instanceof Error ? restoreError.message : restoreError}`,
+      )
     }
 
-    throw new Error(`快照恢复失败，数据已自动回滚到恢复前的状态。错误: ${restoreErr instanceof Error ? restoreErr.message : restoreErr}`)
+    throw new Error(
+      `快照恢复失败，数据已自动回滚到恢复前的状态。错误: ${restoreError instanceof Error ? restoreError.message : restoreError}`,
+    )
   }
 }

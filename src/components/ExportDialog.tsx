@@ -100,6 +100,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         onClose()
         return
       }
+      // A WebView download link is not a reliable fallback for a failed native
+      // filesystem/share operation. Keep the dialog open and report the failure.
+      if (Capacitor.isNativePlatform()) {
+        if (mountedRef.current) {
+          setExportError('导出失败，未生成可分享的备份文件，请稍后重试。')
+        }
+        return
+      }
       // Share failed but blob exists — retry download with same blob
       if (blob) {
         try {
@@ -161,6 +169,10 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
                 <span>{preview.tagCount} 个</span>
               </div>
               <div className="preview-row">
+                <span className="preview-label">图片数量</span>
+                <span>{preview.mediaCount} 张</span>
+              </div>
+              <div className="preview-row">
                 <span className="preview-label">最早记录</span>
                 <span>{preview.earliestEntry ? new Date(preview.earliestEntry).toLocaleDateString('zh-CN') : '—'}</span>
               </div>
@@ -172,7 +184,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
               backup.json 包含完整恢复数据，包括回收站中的记录；
-              journal.md 只包含当前正常日记，方便长期阅读。
+              media/ 目录保存全部引用图片的本地二进制文件并带 SHA-256 校验；
+              journal.md 只包含当前正常日记的纯文字，方便长期阅读。
             </p>
 
             {exportError ? (

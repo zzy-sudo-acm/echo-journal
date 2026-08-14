@@ -3,8 +3,9 @@ import { Share } from '@capacitor/share'
 
 const EXPORT_DIRECTORY = 'echo-journal-exports'
 const EXPORT_FILE_PREFIX = 'echo-journal-backup-'
+const NATIVE_WRITE_CHUNK_BYTES = 1024 * 1024
 
-async function blobToBase64(blob: Blob) {
+async function blobChunkToBase64(blob: Blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer())
   const chunks: string[] = []
   const chunkSize = 0x8000
@@ -14,6 +15,47 @@ async function blobToBase64(blob: Blob) {
   }
 
   return btoa(chunks.join(''))
+}
+
+/**
+ * Capacitor's native Filesystem bridge accepts base64 strings. Writing the
+ * whole archive at once would keep the ZIP ArrayBuffer, binary string and
+ * base64 copy alive together, which is risky for photo-heavy backups in an
+ * Android WebView. Encode and append bounded slices instead.
+ */
+async function writeBlobInChunks(blob: Blob, path: string) {
+  if (blob.size === 0) {
+    await Filesystem.writeFile({
+      path,
+      data: '',
+      directory: Directory.Cache,
+      recursive: true,
+    })
+    return
+  }
+
+  let firstChunk = true
+  for (let offset = 0; offset < blob.size; offset += NATIVE_WRITE_CHUNK_BYTES) {
+    const data = await blobChunkToBase64(
+      blob.slice(offset, Math.min(offset + NATIVE_WRITE_CHUNK_BYTES, blob.size)),
+    )
+
+    if (firstChunk) {
+      await Filesystem.writeFile({
+        path,
+        data,
+        directory: Directory.Cache,
+        recursive: true,
+      })
+      firstChunk = false
+    } else {
+      await Filesystem.appendFile({
+        path,
+        data,
+        directory: Directory.Cache,
+      })
+    }
+  }
 }
 
 async function cleanupOldExports() {
@@ -38,12 +80,7 @@ export async function shareNativeExport(blob: Blob, filename: string) {
   await cleanupOldExports()
 
   const path = `${EXPORT_DIRECTORY}/${filename}`
-  await Filesystem.writeFile({
-    path,
-    data: await blobToBase64(blob),
-    directory: Directory.Cache,
-    recursive: true,
-  })
+  await writeBlobInChunks(blob, path)
 
   const { uri } = await Filesystem.getUri({
     path,

@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
 import { getSnapshots, createDailySnapshot, cleanupOldSnapshots, pinSnapshot, deleteSnapshot, restoreFromSnapshot } from '../services/snapshot'
 import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, PinIcon, ShieldIcon, TrashIcon, UploadIcon } from '../components/Icons'
-import type { InternalSnapshot } from '../db/models'
+import { APP_VERSION, type InternalSnapshot } from '../db/models'
 import { db } from '../db/database'
 import { getLocalDateString, toLocalDate } from '../utils/date'
 import type { JournalFont } from '../store/uiStore'
@@ -63,7 +63,7 @@ export function SettingsPage() {
 
   const handleClearData = async () => {
     try {
-      await db.entries.clear(); await db.drafts.clear(); await db.tags.clear(); await db.snapshots.clear()
+      await db.entries.clear(); await db.drafts.clear(); await db.tags.clear(); await db.snapshots.clear(); await db.media.clear()
       showToast('所有数据已清除', 'success')
       await Promise.all([loadStats(), loadSnapshots()])
     } catch { showToast('清除数据失败', 'error') }
@@ -152,12 +152,12 @@ export function SettingsPage() {
       <section className="settings-section settings-links">
         <Link className="settings-disclosure" to="/trash"><span className="settings-row-label"><TrashIcon /><span><strong>回收站</strong><small>{trashCount > 0 ? `${trashCount} 条` : '回收站是空的'}</small></span></span><ChevronRightIcon /></Link>
         <Link className="settings-disclosure" to="/review"><span className="settings-row-label"><ClockIcon /><span><strong>过去的今天</strong><small>查看往年同一天的记录</small></span></span><ChevronRightIcon /></Link>
-        <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v1.0.2</small></span></div>
+        <div className="settings-disclosure"><span><strong>关于回声日记</strong><small>本地优先的私人日记 · v{APP_VERSION}</small></span></div>
       </section>
 
       <section className="settings-section danger-zone">
         <div className="settings-section-title">危险操作</div>
-        <button type="button" className="danger-row" onClick={() => setShowClearConfirm(true)}><TrashIcon /><span><strong>清除全部数据</strong><small>删除日记、草稿、标签与内部快照</small></span></button>
+        <button type="button" className="danger-row" onClick={() => setShowClearConfirm(true)}><TrashIcon /><span><strong>清除全部数据</strong><small>删除日记、图片、草稿、标签与内部快照</small></span></button>
         <p>此操作不可撤销，请先导出备份。</p>
       </section>
 
