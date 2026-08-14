@@ -1,3 +1,5 @@
+import { Dialog } from './ui/Overlay'
+
 interface ConfirmDialogProps {
   message: string
   confirmLabel?: string
@@ -18,22 +20,21 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div className="confirm-overlay" onClick={(event) => { event.stopPropagation(); if (!confirming) onCancel() }}>
-      <div className="confirm-box" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <p>{message}</p>
-        <div className="btn-group">
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={confirming}>
-            {cancelLabel}
-          </button>
-          <button type="button"
-            className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
-            onClick={onConfirm}
-            disabled={confirming}
-          >
-            {confirming ? '执行中…' : confirmLabel}
-          </button>
-        </div>
+    <Dialog onClose={() => { if (!confirming) onCancel() }} role="alertdialog" ariaLabel={message}>
+      <p>{message}</p>
+      <div className="btn-group">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={confirming}>
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
+          onClick={onConfirm}
+          disabled={confirming}
+        >
+          {confirming ? '执行中…' : confirmLabel}
+        </button>
       </div>
-    </div>
+    </Dialog>
   )
 }

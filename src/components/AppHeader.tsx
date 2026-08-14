@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
-import { OPEN_FULL_EDITOR_EVENT } from '../utils/events'
+import { requestFullEditorOpen } from '../utils/events'
 import { MoonIcon, SunIcon } from './Icons'
 
 const desktopNavigation = [
@@ -17,7 +17,6 @@ export function AppHeader() {
   const navigate = useNavigate()
   const writingButtonRef = useRef<HTMLButtonElement>(null)
   const writingAnimationRef = useRef<Animation | null>(null)
-  const writingFocusTimerRef = useRef<number | null>(null)
   const desktopNavigationAnimationsRef = useRef(new Map<HTMLElement, Animation>())
   const buttonRef = useRef<HTMLButtonElement>(null)
   const iconRef = useRef<HTMLSpanElement>(null)
@@ -26,7 +25,6 @@ export function AppHeader() {
 
   useEffect(() => () => {
     writingAnimationRef.current?.cancel()
-    if (writingFocusTimerRef.current !== null) window.clearTimeout(writingFocusTimerRef.current)
     desktopNavigationAnimationsRef.current.forEach((animation) => animation.cancel())
     desktopNavigationAnimationsRef.current.clear()
     buttonAnimationRef.current?.cancel()
@@ -52,19 +50,14 @@ export function AppHeader() {
     }, { once: true })
   }
 
-  const openFullEditor = () => window.dispatchEvent(new Event(OPEN_FULL_EDITOR_EVENT))
+  // Cross-page safe: the timeline consumes the pending request when it mounts.
+  const openFullEditor = () => {
+    if (pathname !== '/') navigate('/')
+    requestFullEditorOpen()
+  }
 
   const handleDesktopWritingClick = (event: MouseEvent<HTMLButtonElement>) => {
     playDesktopNavigationFeedback(event.currentTarget)
-    if (pathname !== '/') {
-      navigate('/')
-      if (writingFocusTimerRef.current !== null) window.clearTimeout(writingFocusTimerRef.current)
-      writingFocusTimerRef.current = window.setTimeout(() => {
-        writingFocusTimerRef.current = null
-        openFullEditor()
-      }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 32 : 300)
-      return
-    }
     openFullEditor()
   }
 
@@ -83,17 +76,7 @@ export function AppHeader() {
       ) ?? null
     }
 
-    if (pathname === '/') {
-      if (writingFocusTimerRef.current === null) openFullEditor()
-      return
-    }
-
-    if (writingFocusTimerRef.current !== null) window.clearTimeout(writingFocusTimerRef.current)
-    navigate('/')
-    writingFocusTimerRef.current = window.setTimeout(() => {
-      writingFocusTimerRef.current = null
-      openFullEditor()
-    }, reducedMotion ? 32 : 300)
+    openFullEditor()
   }
 
   const handleThemeToggle = () => {

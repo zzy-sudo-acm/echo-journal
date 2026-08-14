@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEntryStore } from '../store/entryStore'
+import { useVisualViewport } from '../hooks/useVisualViewport'
 import { TagInput } from './TagInput'
 import { TagIcon } from './Icons'
 import { draftRepo } from '../db/repository'
 
 interface QuickInputProps {
   onSaved?: () => void | Promise<void>
-  focusRequest?: number
 }
 
 type DraftStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
+export function QuickInput({ onSaved }: QuickInputProps) {
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [expanded, setExpanded] = useState(false)
@@ -54,11 +54,6 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    if (focusRequest === 0) return
-    textareaRef.current?.focus({ preventScroll: true })
-  }, [focusRequest])
-
   const collapseComposer = useCallback(() => {
     setFocused(false)
     setExpanded(false)
@@ -68,50 +63,34 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
   // Android keeps the textarea focused when the Back button only dismisses the
   // soft keyboard. Follow the visual viewport so the paper can fold back even
   // when the browser does not emit a blur event.
-  useEffect(() => {
-    const viewport = window.visualViewport
-    const resizeTarget: EventTarget = viewport ?? window
-    const getViewportHeight = () => viewport?.height ?? window.innerHeight
-    let restingHeight = getViewportHeight()
-    let keyboardWasVisible = false
+  const restingHeightRef = useRef(0)
+  const keyboardVisibleRef = useRef(false)
 
-    const handleViewportResize = () => {
-      const currentHeight = getViewportHeight()
-      const activeElement = document.activeElement
-      const composerHasFocus = activeElement instanceof HTMLElement
-        && Boolean(composerRef.current?.contains(activeElement))
+  useVisualViewport(({ height }) => {
+    const activeElement = document.activeElement
+    const composerHasFocus = activeElement instanceof HTMLElement
+      && Boolean(composerRef.current?.contains(activeElement))
 
-      if (!composerHasFocus) {
-        restingHeight = currentHeight
-        keyboardWasVisible = false
-        return
-      }
-
-      const keyboardThreshold = Math.min(120, restingHeight * 0.22)
-      if (currentHeight < restingHeight - keyboardThreshold) {
-        keyboardWasVisible = true
-        return
-      }
-
-      if (keyboardWasVisible && currentHeight >= restingHeight - 48) {
-        keyboardWasVisible = false
-        activeElement.blur()
-        collapseComposer()
-      }
+    if (!composerHasFocus) {
+      restingHeightRef.current = height
+      keyboardVisibleRef.current = false
+      return
     }
 
-    const resetRestingHeight = () => {
-      restingHeight = getViewportHeight()
-      keyboardWasVisible = false
+    if (restingHeightRef.current === 0) restingHeightRef.current = height
+    const restingHeight = restingHeightRef.current
+    const keyboardThreshold = Math.min(120, restingHeight * 0.22)
+    if (height < restingHeight - keyboardThreshold) {
+      keyboardVisibleRef.current = true
+      return
     }
 
-    resizeTarget.addEventListener('resize', handleViewportResize)
-    window.addEventListener('orientationchange', resetRestingHeight)
-    return () => {
-      resizeTarget.removeEventListener('resize', handleViewportResize)
-      window.removeEventListener('orientationchange', resetRestingHeight)
+    if (keyboardVisibleRef.current && height >= restingHeight - 48) {
+      keyboardVisibleRef.current = false
+      activeElement.blur()
+      collapseComposer()
     }
-  }, [collapseComposer])
+  })
 
   // Single debounce layer for draft saving
   useEffect(() => {
@@ -238,6 +217,11 @@ export function QuickInput({ onSaved, focusRequest = 0 }: QuickInputProps) {
             <span className={`sr-only status-${draftStatus}`} aria-live="polite">
               {draftStatus === 'saving' ? '正在保存草稿' : null}
               {draftStatus === 'saved' ? '草稿已保存' : null}
+              {draftStatus === 'error' ? '草稿保存失败' : null}
+            </span>
+            <span className="composer-draft-state" aria-hidden="true">
+              {draftStatus === 'saving' ? '存草稿中…' : null}
+              {draftStatus === 'saved' ? '草稿已存' : null}
               {draftStatus === 'error' ? '草稿保存失败' : null}
             </span>
             {content.trim() ? (

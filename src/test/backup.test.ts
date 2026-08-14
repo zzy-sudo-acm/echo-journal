@@ -14,6 +14,7 @@ import {
   createRollbackSnapshot,
 } from '../services/backup'
 import { computeChecksum } from '../services/validation'
+import { APP_VERSION, SCHEMA_VERSION } from '../db/models'
 import type { Entry, BackupData } from '../db/models'
 
 // Helper to build a valid BackupData with proper checksum
@@ -56,10 +57,10 @@ describe('Backup Generation', () => {
     expect(data.entries.length).toBe(2)
     expect(data.tags.length).toBe(2)
     expect(data.manifest.appName).toBe('回声日记')
-    expect(data.manifest.schemaVersion).toBe(2)
+    expect(data.manifest.schemaVersion).toBe(SCHEMA_VERSION)
     expect(data.manifest.checksum).toBeTruthy()
-    // Checksum should be valid
-    const actual = computeChecksum(data.entries, data.tags)
+    // Checksum should be valid (schema v3 includes media metadata)
+    const actual = computeChecksum(data.entries, data.tags, data.media ?? [])
     expect(data.manifest.checksum).toBe(actual)
   })
 
@@ -177,9 +178,9 @@ describe('Backup Import & Validation', () => {
     // Tamper: modify entry content without updating checksum
     data.entries[0].content = '被篡改的内容'
 
-    // Build file manually with mismatched checksum
+    // Build file manually with mismatched checksum (media array required by schema v3)
     const blob = new Blob(
-      [JSON.stringify({ manifest: data.manifest, entries: data.entries, tags: data.tags })],
+      [JSON.stringify({ manifest: data.manifest, entries: data.entries, tags: data.tags, media: data.media ?? [] })],
       { type: 'application/json' },
     )
     const file = new File([blob], 'tampered.json', { type: 'application/json' })
@@ -243,7 +244,7 @@ describe('Backup Import & Validation', () => {
     expect(preview.isValid).toBe(true)
     expect(preview.entryCount).toBe(1)
     expect(preview.compatible).toBe(true)
-    expect(preview.appVersion).toBe('1.0.0')
+    expect(preview.appVersion).toBe(APP_VERSION)
   })
 
   it('should detect incompatible schema versions', async () => {

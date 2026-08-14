@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+import type { TouchEvent } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from './Icons'
 import { getLocalDateString } from '../utils/date'
 
@@ -29,6 +31,7 @@ export function Calendar({
   selectable = true,
 }: CalendarProps) {
   const today = getLocalDateString()
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const prevMonthDays = new Date(year, month, 0).getDate()
@@ -40,8 +43,31 @@ export function Calendar({
   }
   for (let day = 1; cells.length < 42; day++) cells.push({ day, date: null, current: false })
 
+  // Horizontal swipe switches months; vertical scroll passes through.
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+    touchStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return
+    if (deltaX < 0) onNextMonth()
+    else onPrevMonth()
+  }
+
   return (
-    <section className="calendar" aria-label={`${year} 年 ${month + 1} 月日历`}>
+    <section
+      className="calendar"
+      aria-label={`${year} 年 ${month + 1} 月日历`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="calendar-header">
         <button type="button" className="icon-button" aria-label="上个月" onClick={onPrevMonth}><ChevronLeftIcon /></button>
         <h2>{year} 年 {month + 1} 月</h2>

@@ -31,3 +31,14 @@ if (!URL.createObjectURL || !URL.revokeObjectURL) {
     configurable: true,
   })
 }
+
+// jsdom lacks the layout APIs ProseMirror calls when scrolling to the caret
+// (the rich editor autofocuses on mount). Stub them as empty measurements.
+if (typeof Range !== 'undefined') {
+  if (!Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = () => [] as unknown as DOMRectList
+  }
+  if (!Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = () => ({} as DOMRect)
+  }
+}

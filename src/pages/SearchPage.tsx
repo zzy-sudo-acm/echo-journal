@@ -7,13 +7,15 @@ import {
   type SearchDateFilter,
   type SearchResult,
 } from '../services/search'
-import type { TagInfo, Entry, CreateEntryInput } from '../db/models'
+import type { Entry, CreateEntryInput } from '../db/models'
 import { CalendarIcon, SearchIcon, TagIcon, XIcon } from '../components/Icons'
 import { LazyEntryEditor } from '../components/LazyEntryEditor'
 import { JournalRenderer } from '../components/rich-text/JournalRenderer'
 import { SearchDateFilterPanel } from '../components/SearchDateFilter'
+import { Sheet } from '../components/ui/Overlay'
 import { useEntryStore } from '../store/entryStore'
 import { useToast } from '../components/ToastContext'
+import { useAllTags } from '../db/live'
 import { formatLocalDateString, toLocalDate } from '../utils/date'
 
 function highlight(text: string, keyword: string): ReactNode {
@@ -37,7 +39,7 @@ function highlight(text: string, keyword: string): ReactNode {
 export function SearchPage() {
   const [keyword, setKeyword] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
-  const [tags, setTags] = useState<TagInfo[]>([])
+  const tags = useAllTags()
   const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set())
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<SearchDateFilter>(NO_DATE_FILTER)
@@ -50,17 +52,12 @@ export function SearchPage() {
   const { showToast } = useToast()
   const deferredKeyword = useDeferredValue(keyword.trim())
 
-  const loadMeta = async () => {
-    const [nextTags, dates] = await Promise.all([
-      entryRepo.getAllTags(),
-      entryRepo.getDatesWithEntries(),
-    ])
-    setTags(nextTags)
-    setDatesWithEntries(new Set(dates))
+  const loadDates = async () => {
+    setDatesWithEntries(new Set(await entryRepo.getDatesWithEntries()))
   }
 
   useEffect(() => {
-    void loadMeta()
+    void loadDates()
   }, [])
 
   useEffect(() => {
@@ -123,13 +120,11 @@ export function SearchPage() {
   const handleUpdate = async (input: CreateEntryInput) => {
     if (!editingEntry) return
     await updateEntry(editingEntry.id, input)
-    const [nextResults, nextTags, dates] = await Promise.all([
+    const [nextResults, dates] = await Promise.all([
       searchEntries(keyword.trim(), selectedTag || undefined, dateFilter),
-      entryRepo.getAllTags(),
       entryRepo.getDatesWithEntries(),
     ])
     setResults(nextResults)
-    setTags(nextTags)
     setDatesWithEntries(new Set(dates))
     showToast('日记已更新', 'success')
   }
@@ -164,49 +159,46 @@ export function SearchPage() {
         </div>
 
         {tagFilterOpen ? (
-          <>
-            <button type="button" className="search-date-scrim" aria-label="关闭标签筛选" onClick={() => setTagFilterOpen(false)} />
-            <section className="search-date-panel" role="dialog" aria-modal="true" aria-labelledby="tag-filter-title">
-              <header className="search-date-header">
-                <div>
-                  <h2 id="tag-filter-title">选择标签</h2>
-                  <p>{selectedTag ? `已选: #${selectedTag}` : '单选一个标签筛选'}</p>
-                </div>
-                <button type="button" className="icon-button" aria-label="关闭标签筛选" onClick={() => setTagFilterOpen(false)}><XIcon /></button>
-              </header>
-              <div className="tag-filter-list">
-                {tags.length === 0 ? (
-                  <p className="date-filter-all-copy">暂无标签。</p>
-                ) : (
-                  tags.map((tag) => (
-                    <button
-                      type="button"
-                      key={tag.name}
-                      className={`tag-filter-option ${selectedTag === tag.name ? 'active' : ''}`}
-                      aria-pressed={selectedTag === tag.name}
-                      onClick={() => {
-                        setSelectedTag(selectedTag === tag.name ? null : tag.name)
-                        setTagFilterOpen(false)
-                      }}
-                    >
-                      <span>#{tag.name}</span>
-                      <span>{tag.count}</span>
-                    </button>
-                  ))
-                )}
+          <Sheet onClose={() => setTagFilterOpen(false)} ariaLabelledBy="tag-filter-title">
+            <header className="search-date-header">
+              <div>
+                <h2 id="tag-filter-title">选择标签</h2>
+                <p>{selectedTag ? `已选: #${selectedTag}` : '单选一个标签筛选'}</p>
               </div>
-              <footer className="search-date-actions">
-                {selectedTag ? (
-                  <button type="button" className="btn btn-ghost" onClick={() => { setSelectedTag(null); setTagFilterOpen(false) }}>
-                    清除标签
+              <button type="button" className="icon-button" aria-label="关闭标签筛选" onClick={() => setTagFilterOpen(false)}><XIcon /></button>
+            </header>
+            <div className="tag-filter-list">
+              {tags.length === 0 ? (
+                <p className="date-filter-all-copy">暂无标签。</p>
+              ) : (
+                tags.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag.name}
+                    className={`tag-filter-option ${selectedTag === tag.name ? 'active' : ''}`}
+                    aria-pressed={selectedTag === tag.name}
+                    onClick={() => {
+                      setSelectedTag(selectedTag === tag.name ? null : tag.name)
+                      setTagFilterOpen(false)
+                    }}
+                  >
+                    <span>#{tag.name}</span>
+                    <span>{tag.count}</span>
                   </button>
-                ) : null}
-                <button type="button" className="btn btn-primary" onClick={() => setTagFilterOpen(false)}>
-                  完成
+                ))
+              )}
+            </div>
+            <footer className="search-date-actions">
+              {selectedTag ? (
+                <button type="button" className="btn btn-ghost" onClick={() => { setSelectedTag(null); setTagFilterOpen(false) }}>
+                  清除标签
                 </button>
-              </footer>
-            </section>
-          </>
+              ) : null}
+              <button type="button" className="btn btn-primary" onClick={() => setTagFilterOpen(false)}>
+                完成
+              </button>
+            </footer>
+          </Sheet>
         ) : null}
 
         {dateFilterOpen ? (
@@ -286,19 +278,17 @@ export function SearchPage() {
       </section>
 
       {viewingEntry ? (
-        <div className="modal-overlay" onClick={() => setViewingEntry(null)}>
-          <article className="modal entry-detail" role="dialog" aria-modal="true" aria-label="日记详情" onClick={(event) => event.stopPropagation()}>
-            <header className="modal-header"><time>{new Date(viewingEntry.createdAt).toLocaleString('zh-CN')}</time><button type="button" className="icon-button" aria-label="关闭详情" onClick={() => setViewingEntry(null)}><XIcon /></button></header>
-            {viewingEntry.title ? <h2>{viewingEntry.title}</h2> : null}
-            {viewingEntry.richContent ? (
-              <JournalRenderer content={viewingEntry.richContent} className="entry-detail-content" />
-            ) : (
-              <p>{viewingEntry.content}</p>
-            )}
-            {viewingEntry.tags.length ? <div className="entry-tags">{viewingEntry.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div> : null}
-            <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setViewingEntry(null)}>关闭</button><button type="button" className="btn btn-primary" onClick={() => { setEditingEntry(viewingEntry); setViewingEntry(null) }}>编辑</button></div>
-          </article>
-        </div>
+        <Sheet onClose={() => setViewingEntry(null)} className="entry-detail" ariaLabel="日记详情">
+          <header className="modal-header"><time>{new Date(viewingEntry.createdAt).toLocaleString('zh-CN')}</time><button type="button" className="icon-button" aria-label="关闭详情" onClick={() => setViewingEntry(null)}><XIcon /></button></header>
+          {viewingEntry.title ? <h2>{viewingEntry.title}</h2> : null}
+          {viewingEntry.richContent ? (
+            <JournalRenderer content={viewingEntry.richContent} className="entry-detail-content" />
+          ) : (
+            <p>{viewingEntry.content}</p>
+          )}
+          {viewingEntry.tags.length ? <div className="entry-tags">{viewingEntry.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div> : null}
+          <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setViewingEntry(null)}>关闭</button><button type="button" className="btn btn-primary" onClick={() => { setEditingEntry(viewingEntry); setViewingEntry(null) }}>编辑</button></div>
+        </Sheet>
       ) : null}
       {editingEntry ? <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
     </main>

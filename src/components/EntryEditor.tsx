@@ -8,6 +8,8 @@ import { cleanupOrphanMedia, mediaRepo } from '../db/repository'
 import { collectMediaIds, extractPlainText, plainTextToRichContent } from '../services/richContent'
 import { processImageFiles } from '../services/imageProcessing'
 import { LOCAL_MEDIA_UPDATED_EVENT } from '../utils/events'
+import { useOverlayClose } from '../hooks/useOverlayClose'
+import { useVisualViewport } from '../hooks/useVisualViewport'
 import { TagInput } from './TagInput'
 import { XIcon } from './Icons'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -42,6 +44,16 @@ function removeLocalImageNode(editor: Editor, mediaId: string) {
   editor.view.dispatch(transaction)
 }
 
+type EditorDoc = Editor['state']['doc']
+
+function countLocalImages(doc: EditorDoc): number {
+  let count = 0
+  doc.descendants((node) => {
+    if (node.type.name === 'localImage') count += 1
+  })
+  return count
+}
+
 export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
   const initialContent = entry?.content || ''
   const initialTitle = entry?.title || ''
@@ -58,10 +70,13 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [editorDirty, setEditorDirty] = useState(false)
   const [imageTaskCount, setImageTaskCount] = useState(0)
+  const [imageCount, setImageCount] = useState(0)
+  const imageCountTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const savedSelectionRef = useRef<number | null>(null)
   const imageHandlerRef = useRef<((files: File[], position: number) => void) | null>(null)
+  const saveRef = useRef<() => void>(() => {})
   const sessionMediaRef = useRef({ ids: new Set<string>(), committed: false })
   const closingRef = useRef(false)
   const mountedRef = useRef(true)
@@ -96,19 +111,32 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
         class: 'journal-prosemirror',
         'aria-label': '日记正文',
       },
+      handleKeyDown: (_view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          event.preventDefault()
+          saveRef.current()
+          return true
+        }
+        return false
+      },
     },
-    onUpdate: () => setEditorDirty(true),
+    onCreate: ({ editor: current }) => setImageCount(countLocalImages(current.state.doc)),
+    onUpdate: ({ editor: current }) => {
+      setEditorDirty(true)
+      // Recount images at most once per burst of typing instead of on every
+      // transaction — the traversal is O(document) and keystrokes are many.
+      if (imageCountTimerRef.current) clearTimeout(imageCountTimerRef.current)
+      const doc = current.state.doc
+      imageCountTimerRef.current = setTimeout(() => {
+        imageCountTimerRef.current = null
+        if (mountedRef.current) setImageCount(countLocalImages(doc))
+      }, 300)
+    },
   }, [])
 
   const documentState = useEditorState({
     editor,
-    selector: ({ editor: current }) => {
-      let imageCount = 0
-      current.state.doc.descendants((node) => {
-        if (node.type.name === 'localImage') imageCount += 1
-      })
-      return { isEmpty: current.isEmpty, imageCount }
-    },
+    selector: ({ editor: current }) => ({ isEmpty: current.isEmpty }),
   })
 
   const insertImages = useCallback(async (files: File[], requestedPosition: number) => {
@@ -206,35 +234,22 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
     return () => {
       mountedRef.current = false
       document.body.style.overflow = previousOverflow
+      if (imageCountTimerRef.current) {
+        clearTimeout(imageCountTimerRef.current)
+        imageCountTimerRef.current = null
+      }
       if (!sessionMedia.committed && sessionMedia.ids.size > 0) {
         void cleanupOrphanMedia(sessionMedia.ids)
       }
     }
   }, [])
 
-  useEffect(() => {
+  useVisualViewport(({ height, top }) => {
     const overlay = overlayRef.current
     if (!overlay) return
-    const viewport = window.visualViewport
-
-    const updateViewport = () => {
-      const height = viewport?.height ?? window.innerHeight
-      const top = viewport?.offsetTop ?? 0
-      overlay.style.setProperty('--editor-viewport-height', `${height}px`)
-      overlay.style.setProperty('--editor-viewport-top', `${top}px`)
-    }
-
-    updateViewport()
-    const resizeTarget: EventTarget = viewport ?? window
-    resizeTarget.addEventListener('resize', updateViewport)
-    viewport?.addEventListener('scroll', updateViewport)
-    window.addEventListener('orientationchange', updateViewport)
-    return () => {
-      resizeTarget.removeEventListener('resize', updateViewport)
-      viewport?.removeEventListener('scroll', updateViewport)
-      window.removeEventListener('orientationchange', updateViewport)
-    }
-  }, [])
+    overlay.style.setProperty('--editor-viewport-height', `${height}px`)
+    overlay.style.setProperty('--editor-viewport-top', `${top}px`)
+  })
 
   const imageBusy = imageTaskCount > 0
   const hasChanges =
@@ -242,7 +257,7 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
     title !== initialTitle ||
     tags.join(',') !== initialTags.join(',') ||
     createdAt !== initialCreatedAt
-  const canSave = !documentState.isEmpty || documentState.imageCount > 0
+  const canSave = !documentState.isEmpty || imageCount > 0
 
   const handleSave = async () => {
     if (saving || imageBusy || !canSave) return
@@ -308,13 +323,17 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
     }
   }
 
+  saveRef.current = () => void handleSave()
+  // Hardware back / Escape go through the same guarded close as the X button.
+  useOverlayClose(handleClose)
+
   const chooseImages = () => {
     savedSelectionRef.current = editor.state.selection.from
     fileInputRef.current?.click()
   }
 
   return (
-    <div ref={overlayRef} className="modal-overlay editor-overlay" onClick={handleClose}>
+    <div ref={overlayRef} className="modal-overlay editor-overlay">
       <section className="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title" onClick={(event) => event.stopPropagation()}>
         <header className="modal-header editor-header">
           <div>

@@ -10,7 +10,7 @@ import type {
   UpdateJournalMediaInput,
 } from './models'
 import { v4 as uuidv4 } from './uuid'
-import { toLocalDate } from '../utils/date'
+import { parseLocalDateString, toLocalDate } from '../utils/date'
 import { collectMediaIds, extractPlainText } from '../services/richContent'
 
 function generateId(): string {
@@ -63,6 +63,27 @@ function entryLocalMonthDay(entry: Entry): string {
 
 function isActive(entry: Entry): boolean {
   return !entry.deletedAt
+}
+
+// ── Indexed range queries ──
+// createdAt is stored as ISO 8601 and indexed, so local-day bounds converted to
+// UTC ISO strings give us cheap indexed range scans instead of full-table reads.
+
+/** [startISO, endISO) UTC bounds of the local day containing `date`. */
+function localDayBounds(date: Date): [string, string] {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return [start.toISOString(), end.toISOString()]
+}
+
+/** Active (non-draft, non-deleted) entries within [startISO, endISO), via the createdAt index. */
+async function listActiveInRange(startISO: string, endISO: string): Promise<Entry[]> {
+  const entries = await db.entries
+    .where('createdAt')
+    .between(startISO, endISO, true, false)
+    .toArray()
+  return entries.filter((entry) => isActive(entry) && !entry.isDraft)
 }
 
 export const entryRepo = {
@@ -250,6 +271,43 @@ export const entryRepo = {
     const start = query.offset ?? 0
     const end = query.limit !== undefined ? start + query.limit : undefined
     return entries.slice(start, end)
+  },
+
+  /** Active entries from the most recent `days` local days, ascending by createdAt. */
+  async listRecentDays(days: number): Promise<Entry[]> {
+    const start = new Date()
+    start.setDate(start.getDate() - (days - 1))
+    const [startISO] = localDayBounds(start)
+    const entries = await db.entries.where('createdAt').aboveOrEqual(startISO).toArray()
+    const active = entries.filter((entry) => isActive(entry) && !entry.isDraft)
+    active.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return active
+  },
+
+  /** Whether anything (incl. drafts/trash) exists older than `days` ago — drives "load earlier". */
+  async hasEntriesBeyondDays(days: number): Promise<boolean> {
+    const start = new Date()
+    start.setDate(start.getDate() - (days - 1))
+    const [startISO] = localDayBounds(start)
+    const oldest = await db.entries.orderBy('createdAt').first()
+    return Boolean(oldest && oldest.createdAt < startISO)
+  },
+
+  /** Active entries on one local date (YYYY-MM-DD), ascending by createdAt. */
+  async listByDate(localDate: string): Promise<Entry[]> {
+    const [startISO, endISO] = localDayBounds(parseLocalDateString(localDate))
+    const entries = await listActiveInRange(startISO, endISO)
+    entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return entries
+  },
+
+  /** Sorted local dates (YYYY-MM-DD) holding active entries within one month (0-indexed). */
+  async getDatesInMonth(year: number, month: number): Promise<string[]> {
+    const [startISO] = localDayBounds(new Date(year, month, 1))
+    const [endISO] = localDayBounds(new Date(year, month + 1, 1))
+    const entries = await listActiveInRange(startISO, endISO)
+    const dates = new Set(entries.map(entryLocalDate))
+    return Array.from(dates).sort()
   },
 
   async getDatesWithEntries(): Promise<string[]> {

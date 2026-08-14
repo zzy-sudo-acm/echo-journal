@@ -5,6 +5,7 @@ import { parseImportFile, previewBackup, mergeImportWithRollback, replaceImportW
 import { XIcon, UploadIcon } from './Icons'
 import { useToast } from './ToastContext'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Sheet } from './ui/Overlay'
 
 type Stage = 'select' | 'preview' | 'mode' | 'confirmReplace' | 'result'
 
@@ -97,189 +98,200 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Sheet routes overlay taps, Escape and the Android back button through here;
+  // keep the original guard so the dialog stays open while parsing/importing.
+  const handleRequestClose = () => {
+    if (!importing && !parsing) onClose()
+  }
+
   return (
-    <div
-      className="modal-overlay"
-      onClick={() => {
-        if (!importing && !parsing) onClose()
-      }}
-    >
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 className="modal-title" style={{ margin: 0 }}>导入备份</h2>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }} disabled={importing || parsing}>
-            <XIcon />
+    <Sheet onClose={handleRequestClose} ariaLabel="导入备份">
+      <div className="dialog-header">
+        <h2 className="modal-title">导入备份</h2>
+        <button type="button" className="btn btn-ghost dialog-close" onClick={onClose} aria-label="关闭" disabled={importing || parsing}>
+          <XIcon />
+        </button>
+      </div>
+
+      {stage === 'select' && (
+        <div className="import-select">
+          <UploadIcon />
+          <p className="import-select-text">
+            选择之前导出的备份文件
+          </p>
+          <p className="import-select-hint">
+            支持 .zip 和 .json 格式的备份文件
+          </p>
+          {errorMessage && (
+            <div className="preview-warning import-file-error">
+              {errorMessage}
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip,.json,application/json,application/zip"
+            onChange={handleFileSelect}
+            className="import-file-input"
+          />
+          <button type="button" className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={parsing}>
+            {parsing ? '正在校验备份…' : '选择文件'}
           </button>
         </div>
+      )}
 
-        {stage === 'select' && (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <UploadIcon />
-            <p style={{ marginTop: 16, marginBottom: 8, color: 'var(--text-secondary)' }}>
-              选择之前导出的备份文件
-            </p>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginBottom: 20 }}>
-              支持 .zip 和 .json 格式的备份文件
-            </p>
-            {errorMessage && (
-              <div className="preview-warning" style={{ marginBottom: 16 }}>
-                {errorMessage}
-              </div>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".zip,.json,application/json,application/zip"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-            <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={parsing}>
-              {parsing ? '正在校验备份…' : '选择文件'}
-            </button>
+      {stage === 'preview' && preview && (
+        <>
+          <div className="preview-card">
+            <div className="preview-row">
+              <span className="preview-label">备份时间</span>
+              <span>{preview.exportedAt ? new Date(preview.exportedAt).toLocaleString('zh-CN') : '未知'}</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">日记数量</span>
+              <span>{preview.entryCount} 条</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">标签数量</span>
+              <span>{preview.tagCount} 个</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">图片数量</span>
+              <span>{preview.mediaCount} 张</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">时间范围</span>
+              <span>
+                {preview.earliestEntry
+                  ? `${new Date(preview.earliestEntry).toLocaleDateString('zh-CN')} ~ ${preview.latestEntry ? new Date(preview.latestEntry).toLocaleDateString('zh-CN') : '—'}`
+                  : '—'}
+              </span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">数据版本</span>
+              <span>v{preview.schemaVersion}（当前 v{SCHEMA_VERSION}）</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">校验状态</span>
+              <span className="dialog-text-success">✓ 校验通过</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">兼容性</span>
+              <span className={preview.compatible ? 'dialog-text-success' : 'dialog-text-danger'}>
+                {preview.compatible ? '兼容' : '可能不兼容'}
+              </span>
+            </div>
           </div>
-        )}
 
-        {stage === 'preview' && preview && (
-          <>
-            <div className="preview-card">
-              <div className="preview-row">
-                <span className="preview-label">备份时间</span>
-                <span>{preview.exportedAt ? new Date(preview.exportedAt).toLocaleString('zh-CN') : '未知'}</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">日记数量</span>
-                <span>{preview.entryCount} 条</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">标签数量</span>
-                <span>{preview.tagCount} 个</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">图片数量</span>
-                <span>{preview.mediaCount} 张</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">时间范围</span>
-                <span>
-                  {preview.earliestEntry
-                    ? `${new Date(preview.earliestEntry).toLocaleDateString('zh-CN')} ~ ${preview.latestEntry ? new Date(preview.latestEntry).toLocaleDateString('zh-CN') : '—'}`
-                    : '—'}
-                </span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">数据版本</span>
-                <span>v{preview.schemaVersion}（当前 v{SCHEMA_VERSION}）</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">校验状态</span>
-                <span style={{ color: 'var(--success)' }}>✓ 校验通过</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">兼容性</span>
-                <span style={{ color: preview.compatible ? 'var(--success)' : 'var(--danger)' }}>
-                  {preview.compatible ? '兼容' : '可能不兼容'}
-                </span>
-              </div>
+          {preview.errors.length > 0 && (
+            <div className="preview-warning">
+              {preview.errors.map((e, i) => (
+                <div key={i}>⚠ {e}</div>
+              ))}
             </div>
+          )}
 
-            {preview.errors.length > 0 && (
-              <div className="preview-warning">
-                {preview.errors.map((e, i) => (
-                  <div key={i}>⚠ {e}</div>
-                ))}
-              </div>
-            )}
-
-            {preview.isValid ? (
-              <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={() => { setStage('select'); setParsedBackup(null); setPreview(null) }}>
-                  重新选择
-                </button>
-                <button className="btn btn-primary" onClick={() => setStage('mode')}>
-                  继续导入
-                </button>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--danger)', marginTop: 16 }}>
-                备份文件存在问题，无法导入
-              </p>
-            )}
-          </>
-        )}
-
-        {stage === 'mode' && (
-          <>
-            <p style={{ marginBottom: 16, color: 'var(--text-secondary)' }}>
-              选择导入方式。系统会在导入前自动创建安全快照，失败时自动回滚。
-            </p>
-
-            <div className="preview-card" style={{ cursor: importing ? 'default' : 'pointer' }} onClick={handleMerge}>
-              <h3>合并数据</h3>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                将备份中的日记合并到当前数据。重复记录自动跳过，更新记录按时间保留最新版，
-                时间相同内容不同的冲突会保留两份。
-              </p>
-            </div>
-
-            <div className="preview-card" style={{ cursor: importing ? 'default' : 'pointer', border: '1px solid var(--danger)' }} onClick={handleReplaceConfirm}>
-              <h3 style={{ color: 'var(--danger)' }}>替换当前数据</h3>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                清空当前所有日记并用备份数据替换。系统会自动备份当前内容，失败时自动回滚。
-              </p>
-            </div>
-
-            {importing && <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>处理中…</p>}
-
+          {preview.isValid ? (
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setStage('preview')} disabled={importing}>
-                返回
+              <button type="button" className="btn btn-secondary" onClick={() => { setStage('select'); setParsedBackup(null); setPreview(null) }}>
+                重新选择
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => setStage('mode')}>
+                继续导入
               </button>
             </div>
-          </>
-        )}
+          ) : (
+            <p className="import-invalid">
+              备份文件存在问题，无法导入
+            </p>
+          )}
+        </>
+      )}
 
-        {stage === 'result' && result && (
-          <>
-            <div className="preview-card">
-              <div className="preview-row">
-                <span className="preview-label">新增日记</span>
-                <span style={{ color: 'var(--success)' }}>{result.added} 条</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">已存在（跳过）</span>
-                <span>{result.skipped} 条</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">更新</span>
-                <span>{result.updated} 条</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">冲突（已安全处理）</span>
-                <span style={{ color: result.conflicts > 0 ? 'var(--danger)' : undefined }}>
-                  {result.conflicts} 条
-                </span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">当前总计</span>
-                <span>{result.totalEntries} 条</span>
-              </div>
-            </div>
-            <button className="btn btn-primary btn-block" onClick={onClose}>
-              完成
+      {stage === 'mode' && (
+        <>
+          <p className="import-mode-intro">
+            选择导入方式。系统会在导入前自动创建安全快照，失败时自动回滚。
+          </p>
+
+          <button
+            type="button"
+            className="preview-card import-mode-card"
+            onClick={handleMerge}
+            disabled={importing}
+            aria-pressed={importing}
+          >
+            <h3>合并数据</h3>
+            <p className="import-mode-desc">
+              将备份中的日记合并到当前数据。重复记录自动跳过，更新记录按时间保留最新版，
+              时间相同内容不同的冲突会保留两份。
+            </p>
+          </button>
+
+          <button
+            type="button"
+            className="preview-card import-mode-card import-mode-card--danger"
+            onClick={handleReplaceConfirm}
+            disabled={importing}
+            aria-pressed={false}
+          >
+            <h3>替换当前数据</h3>
+            <p className="import-mode-desc">
+              清空当前所有日记并用备份数据替换。系统会自动备份当前内容，失败时自动回滚。
+            </p>
+          </button>
+
+          {importing && <p className="import-progress">处理中…</p>}
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setStage('preview')} disabled={importing}>
+              返回
             </button>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-        {stage === 'confirmReplace' && (
-          <ConfirmDialog
-            message={`确定要用备份数据（${preview?.entryCount ?? 0} 条日记、${preview?.mediaCount ?? 0} 张图片）替换当前所有日记吗？当前数据将先被自动备份。替换失败时自动回滚。`}
-            confirmLabel="确认替换"
-            danger
-            onConfirm={() => { handleReplace() }}
-            onCancel={() => { if (!importing) setStage('mode') }}
-          />
-        )}
-      </div>
-    </div>
+      {stage === 'result' && result && (
+        <>
+          <div className="preview-card">
+            <div className="preview-row">
+              <span className="preview-label">新增日记</span>
+              <span className="dialog-text-success">{result.added} 条</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">已存在（跳过）</span>
+              <span>{result.skipped} 条</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">更新</span>
+              <span>{result.updated} 条</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">冲突（已安全处理）</span>
+              <span className={result.conflicts > 0 ? 'dialog-text-danger' : undefined}>
+                {result.conflicts} 条
+              </span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">当前总计</span>
+              <span>{result.totalEntries} 条</span>
+            </div>
+          </div>
+          <button type="button" className="btn btn-primary btn-block" onClick={onClose}>
+            完成
+          </button>
+        </>
+      )}
+
+      {stage === 'confirmReplace' && (
+        <ConfirmDialog
+          message={`确定要用备份数据（${preview?.entryCount ?? 0} 条日记、${preview?.mediaCount ?? 0} 张图片）替换当前所有日记吗？当前数据将先被自动备份。替换失败时自动回滚。`}
+          confirmLabel="确认替换"
+          danger
+          onConfirm={() => { handleReplace() }}
+          onCancel={() => { if (!importing) setStage('mode') }}
+        />
+      )}
+    </Sheet>
   )
 }

@@ -6,7 +6,7 @@ import {
   ReactNodeViewRenderer,
   type ReactNodeViewProps,
 } from '@tiptap/react'
-import { mediaRepo } from '../../db/repository'
+import { acquireMediaUrl } from '../../services/mediaCache'
 import { LOCAL_MEDIA_UPDATED_EVENT } from '../../utils/events'
 
 export interface LocalImageAttributes {
@@ -53,7 +53,6 @@ function LocalImageNodeView({ node, selected }: ReactNodeViewProps) {
 
   useEffect(() => {
     let disposed = false
-    let objectUrl: string | null = null
 
     if (!mediaId) {
       setLoadState({ status: 'missing' })
@@ -64,25 +63,18 @@ function LocalImageNodeView({ node, selected }: ReactNodeViewProps) {
 
     setLoadState({ status: 'loading' })
 
-    void mediaRepo
-      .get(mediaId)
+    const { promise, release } = acquireMediaUrl(mediaId)
+    void promise
       .then((media) => {
         if (disposed) return
-        if (!media?.blob) {
+        if (!media) {
           setLoadState({ status: 'missing' })
-          return
-        }
-
-        objectUrl = URL.createObjectURL(media.blob)
-        if (disposed) {
-          URL.revokeObjectURL(objectUrl)
-          objectUrl = null
           return
         }
 
         setLoadState({
           status: 'ready',
-          url: objectUrl,
+          url: media.url,
           width: media.width,
           height: media.height,
         })
@@ -93,7 +85,7 @@ function LocalImageNodeView({ node, selected }: ReactNodeViewProps) {
 
     return () => {
       disposed = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      release()
     }
   }, [mediaId, mediaRevision])
 

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { entryRepo } from '../db/repository'
+import { useTrashEntries } from '../db/live'
 import { useEntryStore } from '../store/entryStore'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToast } from '../components/ToastContext'
@@ -9,20 +9,14 @@ import { formatLocalDateString, toLocalDate } from '../utils/date'
 import type { Entry } from '../db/models'
 
 export function TrashPage() {
-  const [trashEntries, setTrashEntries] = useState<Entry[]>([])
+  const trashEntries = useTrashEntries()
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [executingDelete, setExecutingDelete] = useState(false)
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false)
   const [emptying, setEmptying] = useState(false)
-  const { restoreEntry, permanentDeleteEntry, emptyTrash, loadToday } = useEntryStore()
+  const { restoreEntry, permanentDeleteEntry, emptyTrash } = useEntryStore()
   const { showToast } = useToast()
-
-  const loadTrash = useCallback(async () => {
-    setTrashEntries(await entryRepo.listTrash())
-  }, [])
-
-  useEffect(() => { void loadTrash() }, [loadTrash])
 
   const groups = useMemo(() => {
     const grouped = new Map<string, Entry[]>()
@@ -39,8 +33,6 @@ export function TrashPage() {
     setRestoringId(id)
     try {
       await restoreEntry(id)
-      await loadTrash()
-      await loadToday()
       showToast('日记已恢复', 'success')
     } catch {
       showToast('恢复失败', 'error')
@@ -53,7 +45,6 @@ export function TrashPage() {
     setExecutingDelete(true)
     try {
       await permanentDeleteEntry(id)
-      await loadTrash()
       showToast('已彻底删除', 'success')
     } catch {
       showToast('彻底删除失败', 'error')
@@ -67,7 +58,6 @@ export function TrashPage() {
     setEmptying(true)
     try {
       await emptyTrash()
-      await loadTrash()
       setShowEmptyConfirm(false)
       showToast('回收站已清空', 'success')
     } catch {

@@ -1,32 +1,29 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { entryRepo } from '../db/repository'
+import { Fragment, useMemo, useState } from 'react'
 import { EntryCard } from '../components/EntryCard'
 import { LazyEntryEditor } from '../components/LazyEntryEditor'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useEntryStore } from '../store/entryStore'
+import { useOnThisDayEntries } from '../db/live'
+import { useEntryActions } from '../hooks/useEntryActions'
 import { useToast } from '../components/ToastContext'
 import { getLocalDateString, toLocalDate } from '../utils/date'
 import type { Entry, CreateEntryInput } from '../db/models'
 
 export function ReviewPage() {
-  const [entries, setEntries] = useState<Entry[]>([])
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
-  const [deletingEntry, setDeletingEntry] = useState<Entry | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  const undoGuardRef = useRef(false)
-  const { updateEntry, deleteEntry, restoreEntry } = useEntryStore()
+  const { deletingEntry, requestDelete, cancelDelete, confirmDelete } = useEntryActions()
+  const { updateEntry } = useEntryStore()
   const { showToast } = useToast()
   const today = new Date()
   const month = today.getMonth()
   const day = today.getDate()
 
-  const loadReview = useCallback(async () => {
-    const found = await entryRepo.getOnThisDay(month, day)
-    const todayString = getLocalDateString()
-    setEntries(found.filter((entry) => toLocalDate(entry.createdAt) !== todayString))
-  }, [month, day])
+  const onThisDayEntries = useOnThisDayEntries(month, day)
 
-  useEffect(() => { void loadReview() }, [loadReview])
+  const entries = useMemo(() => {
+    const todayString = getLocalDateString()
+    return (onThisDayEntries ?? []).filter((entry) => toLocalDate(entry.createdAt) !== todayString)
+  }, [onThisDayEntries])
 
   const byYear = useMemo(() => {
     const groups = new Map<number, Entry[]>()
@@ -43,43 +40,9 @@ export function ReviewPage() {
     if (!editingEntry) return
     try {
       await updateEntry(editingEntry.id, input)
-      void loadReview().catch(() => { /* refresh is best-effort */ })
       showToast('日记已更新', 'success')
     } catch {
       showToast('更新失败', 'error')
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deletingEntry || deleting) return
-    const deletedId = deletingEntry.id
-    setDeleting(true)
-    try {
-      await deleteEntry(deletedId)
-      // Remove from local state immediately
-      setEntries((current) => current.filter((entry) => entry.id !== deletedId))
-      setDeletingEntry(null)
-      // Background refresh
-      void loadReview().catch(() => { /* delete succeeded, refresh is best-effort */ })
-      showToast('已移入回收站', 'success', {
-        label: '撤销',
-        action: async () => {
-          if (undoGuardRef.current) return
-          undoGuardRef.current = true
-          try {
-            await restoreEntry(deletedId)
-            await loadReview()
-          } catch {
-            showToast('恢复失败', 'error')
-          } finally {
-            undoGuardRef.current = false
-          }
-        },
-      })
-    } catch {
-      showToast('删除失败', 'error')
-    } finally {
-      setDeleting(false)
     }
   }
 
@@ -89,11 +52,11 @@ export function ReviewPage() {
       {byYear.length === 0 ? <p className="timeline-empty review-empty">过去的今天还没有记录。继续写下此刻，未来会在这里相遇。</p> : byYear.map(([year, yearEntries]) => (
         <Fragment key={year}>
           <div className="date-divider"><span>{year} 年</span></div>
-          {yearEntries.map((entry) => <EntryCard key={entry.id} entry={entry} onEdit={setEditingEntry} onDelete={setDeletingEntry} onCopied={() => showToast('已复制到剪贴板', 'success')} />)}
+          {yearEntries.map((entry) => <EntryCard key={entry.id} entry={entry} onEdit={setEditingEntry} onDelete={requestDelete} onCopied={() => showToast('已复制到剪贴板', 'success')} />)}
         </Fragment>
       ))}
       {editingEntry ? <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} /> : null}
-      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger confirming={deleting} onConfirm={() => void handleDelete()} onCancel={() => { if (!deleting) setDeletingEntry(null) }} /> : null}
+      {deletingEntry ? <ConfirmDialog message="确定要删除这条日记吗？删除后可前往回收站恢复。" confirmLabel="删除" danger onConfirm={() => void confirmDelete()} onCancel={cancelDelete} /> : null}
     </main>
   )
 }

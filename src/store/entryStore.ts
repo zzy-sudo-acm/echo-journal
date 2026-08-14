@@ -1,19 +1,19 @@
 import { create } from 'zustand'
 import { entryRepo, draftRepo } from '../db/repository'
-import type { Entry, CreateEntryInput, UpdateEntryInput, EntryQuery } from '../db/models'
+import type { Entry, CreateEntryInput, UpdateEntryInput } from '../db/models'
 import { getLocalDateString } from '../utils/date'
 
+/**
+ * Global entry actions + draft + "today" rollover.
+ *
+ * Entry *reads* do not live here: pages subscribe to data through the
+ * liveQuery hooks in `src/db/live.ts`, which refresh automatically on any
+ * mutation. This store only carries cross-cutting actions and UI state.
+ */
 interface EntryState {
-  entries: Entry[]
-  todayEntries: Entry[]
-  onThisDayEntries: Entry[]
   draft: { content: string; title: string; tags: string[] } | null
-  loading: boolean
   todayDate: string
 
-  loadToday: () => Promise<void>
-  loadEntries: (query?: EntryQuery) => Promise<void>
-  loadOnThisDay: (month: number, day: number) => Promise<void>
   createEntry: (input: CreateEntryInput, options?: { clearDraft?: boolean }) => Promise<Entry>
   updateEntry: (id: string, patch: UpdateEntryInput) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
@@ -25,55 +25,12 @@ interface EntryState {
   checkDateChange: () => boolean
 }
 
-/** Run a side-effect after a successful data mutation.
- *  The refresh failure must never cause the mutation to appear as failed. */
-function refreshTodayBestEffort(loadToday: () => Promise<void>) {
-  void loadToday().catch(() => {
-    // Data mutation already succeeded; today-refresh failure is non-critical
-  })
-}
-
 export const useEntryStore = create<EntryState>((set, get) => ({
-  entries: [],
-  todayEntries: [],
-  onThisDayEntries: [],
   draft: null,
-  loading: false,
   todayDate: getLocalDateString(),
 
-  loadToday: async () => {
-    const today = getLocalDateString()
-    const entries = await entryRepo.list({
-      date: today,
-      isDraft: false,
-      orderBy: 'createdAt',
-      orderDir: 'desc',
-    })
-    set({ todayEntries: entries, todayDate: today })
-  },
-
-  loadEntries: async (query?: EntryQuery) => {
-    set({ loading: true })
-    try {
-      const entries = await entryRepo.list({
-        isDraft: false,
-        ...query,
-      })
-      set({ entries, loading: false })
-    } catch (err) {
-      set({ loading: false })
-      throw err
-    }
-  },
-
-  loadOnThisDay: async (month: number, day: number) => {
-    const entries = await entryRepo.getOnThisDay(month, day)
-    set({ onThisDayEntries: entries })
-  },
-
-  createEntry: async (input: CreateEntryInput, options) => {
+  createEntry: async (input, options) => {
     const entry = await entryRepo.create({ ...input, isDraft: false })
-    await get().loadToday()
     if (options?.clearDraft !== false) {
       await draftRepo.clear()
       set({ draft: null })
@@ -81,28 +38,19 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     return entry
   },
 
-  updateEntry: async (id: string, patch: UpdateEntryInput) => {
+  updateEntry: async (id, patch) => {
     await entryRepo.update(id, patch)
-    refreshTodayBestEffort(() => get().loadToday())
   },
 
-  deleteEntry: async (id: string) => {
-    await entryRepo.delete(id)
-    refreshTodayBestEffort(() => get().loadToday())
-  },
+  deleteEntry: (id) => entryRepo.delete(id),
 
-  restoreEntry: async (id: string) => {
+  restoreEntry: async (id) => {
     await entryRepo.restore(id)
-    refreshTodayBestEffort(() => get().loadToday())
   },
 
-  permanentDeleteEntry: async (id: string) => {
-    await entryRepo.permanentDelete(id)
-  },
+  permanentDeleteEntry: (id) => entryRepo.permanentDelete(id),
 
-  emptyTrash: async () => {
-    await entryRepo.emptyTrash()
-  },
+  emptyTrash: () => entryRepo.emptyTrash(),
 
   loadDraft: async () => {
     const draft = await draftRepo.get()
@@ -114,20 +62,12 @@ export const useEntryStore = create<EntryState>((set, get) => ({
     set({ draft: null })
   },
 
-  /** Returns true if the local date changed (crossed midnight).
-   *  Only advances todayDate AFTER a successful loadToday().
-   *  On failure, keeps old todayDate so the next check will retry.
-   *  Does not produce unhandled Promise rejections. */
+  /** Returns true when the local date rolled over (crossed midnight) and
+   *  advances todayDate so date-driven UI re-renders. */
   checkDateChange: () => {
     const current = getLocalDateString()
-    if (current === get().todayDate) {
-      return false
-    }
-
-    void get().loadToday().catch(() => {
-      // loadToday failed — todayDate unchanged, next check retries
-    })
-
+    if (current === get().todayDate) return false
+    set({ todayDate: current })
     return true
   },
 }))

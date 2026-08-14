@@ -4,6 +4,7 @@ import type { ExportPreview } from '../db/models'
 import { XIcon, DownloadIcon } from './Icons'
 import { Capacitor } from '@capacitor/core'
 import { shareNativeExport } from '../services/nativeExport'
+import { Sheet } from './ui/Overlay'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -132,74 +133,73 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Sheet routes overlay taps, Escape and the Android back button through here;
+  // keep the original guard so an in-flight export cannot be dismissed.
+  const handleRequestClose = () => {
+    if (!exportingRef.current) onClose()
+  }
+
   return (
-    <div
-      className="modal-overlay"
-      onClick={() => {
-        if (!exportingRef.current) onClose()
-      }}
-    >
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 className="modal-title" style={{ margin: 0 }}>导出备份</h2>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }} disabled={exporting}>
-            <XIcon />
-          </button>
-        </div>
-
-        {loading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>正在准备备份数据…</p>
-        ) : error ? (
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-        ) : preview ? (
-          <>
-            <div className="preview-card">
-              <div className="preview-row">
-                <span className="preview-label">正常日记</span>
-                <span>{preview.activeEntryCount} 条</span>
-              </div>
-              {preview.trashEntryCount > 0 ? (
-                <div className="preview-row">
-                  <span className="preview-label">回收站</span>
-                  <span>{preview.trashEntryCount} 条</span>
-                </div>
-              ) : null}
-              <div className="preview-row">
-                <span className="preview-label">标签数量</span>
-                <span>{preview.tagCount} 个</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">图片数量</span>
-                <span>{preview.mediaCount} 张</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">最早记录</span>
-                <span>{preview.earliestEntry ? new Date(preview.earliestEntry).toLocaleDateString('zh-CN') : '—'}</span>
-              </div>
-              <div className="preview-row">
-                <span className="preview-label">最晚记录</span>
-                <span>{preview.latestEntry ? new Date(preview.latestEntry).toLocaleDateString('zh-CN') : '—'}</span>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
-              backup.json 包含完整恢复数据，包括回收站中的记录；
-              media/ 目录保存全部引用图片的本地二进制文件并带 SHA-256 校验；
-              journal.md 只包含当前正常日记的纯文字，方便长期阅读。
-            </p>
-
-            {exportError ? (
-              <p style={{ color: 'var(--danger)', fontSize: '0.8125rem', marginBottom: 12 }}>{exportError}</p>
-            ) : null}
-
-            <button className="btn btn-primary btn-block" onClick={handleExport} disabled={exporting}>
-              {exporting ? '正在导出…' : <><DownloadIcon /> 导出备份</>}
-            </button>
-          </>
-        ) : (
-          <p style={{ color: 'var(--danger)' }}>无法生成备份数据</p>
-        )}
+    <Sheet onClose={handleRequestClose} ariaLabel="导出备份">
+      <div className="dialog-header">
+        <h2 className="modal-title">导出备份</h2>
+        <button type="button" className="btn btn-ghost dialog-close" onClick={onClose} aria-label="关闭" disabled={exporting}>
+          <XIcon />
+        </button>
       </div>
-    </div>
+
+      {loading ? (
+        <p className="dialog-text-muted">正在准备备份数据…</p>
+      ) : error ? (
+        <p className="dialog-text-danger">{error}</p>
+      ) : preview ? (
+        <>
+          <div className="preview-card">
+            <div className="preview-row">
+              <span className="preview-label">正常日记</span>
+              <span>{preview.activeEntryCount} 条</span>
+            </div>
+            {preview.trashEntryCount > 0 ? (
+              <div className="preview-row">
+                <span className="preview-label">回收站</span>
+                <span>{preview.trashEntryCount} 条</span>
+              </div>
+            ) : null}
+            <div className="preview-row">
+              <span className="preview-label">标签数量</span>
+              <span>{preview.tagCount} 个</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">图片数量</span>
+              <span>{preview.mediaCount} 张</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">最早记录</span>
+              <span>{preview.earliestEntry ? new Date(preview.earliestEntry).toLocaleDateString('zh-CN') : '—'}</span>
+            </div>
+            <div className="preview-row">
+              <span className="preview-label">最晚记录</span>
+              <span>{preview.latestEntry ? new Date(preview.latestEntry).toLocaleDateString('zh-CN') : '—'}</span>
+            </div>
+          </div>
+
+          <p className="export-hint">
+            backup.json 包含完整恢复数据，包括回收站中的记录；
+            media/ 目录保存全部引用图片的本地二进制文件并带 SHA-256 校验；
+            journal.md 只包含当前正常日记的纯文字，方便长期阅读。
+          </p>
+
+          {exportError ? (
+            <p className="export-error">{exportError}</p>
+          ) : null}
+
+          <button type="button" className="btn btn-primary btn-block" onClick={handleExport} disabled={exporting}>
+            {exporting ? '正在导出…' : <><DownloadIcon /> 导出备份</>}
+          </button>
+        </>
+      ) : (
+        <p className="dialog-text-danger">无法生成备份数据</p>
+      )}
+    </Sheet>
   )
 }

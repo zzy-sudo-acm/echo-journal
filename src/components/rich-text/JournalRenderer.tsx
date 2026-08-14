@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { RichContent } from '../../db/models'
-import { mediaRepo } from '../../db/repository'
+import { acquireMediaUrl } from '../../services/mediaCache'
 import type { PhotoRowsItem } from './PhotoRowsGallery'
 
 const LazyPhotoRowsGallery = lazy(() =>
@@ -87,7 +87,7 @@ function useImageGroup(nodes: readonly RichContent[]): ImageGroupLoadState {
 
   useEffect(() => {
     let disposed = false
-    const objectUrls: string[] = []
+    const releases: Array<() => void> = []
     const nodeAttributes = nodes.map(getImageAttributes)
     const uniqueMediaIds = Array.from(
       new Set(nodeAttributes.map(({ mediaId }) => mediaId).filter(Boolean)),
@@ -95,49 +95,33 @@ function useImageGroup(nodes: readonly RichContent[]): ImageGroupLoadState {
 
     setLoadState({ status: 'loading' })
 
-    void mediaRepo
-      .getMany(uniqueMediaIds)
-      .then((records) => {
+    void Promise.all(
+      uniqueMediaIds.map((mediaId) => {
+        // Shared object URLs come from the cross-card cache, so a long
+        // timeline does not re-read IndexedDB per card.
+        const acquisition = acquireMediaUrl(mediaId)
+        releases.push(acquisition.release)
+        return acquisition.promise.then((media) => ({ mediaId, media }))
+      }),
+    )
+      .then((results) => {
         if (disposed) return
 
-        const recordsById = new Map(records.map((record) => [record.id, record]))
-        const urlsById = new Map<string, string>()
+        const mediaById = new Map(results.map((result) => [result.mediaId, result.media]))
         let missingCount = 0
-        let failedCount = 0
-
-        for (const mediaId of uniqueMediaIds) {
-          const media = recordsById.get(mediaId)
-          if (!media?.blob) continue
-
-          try {
-            const objectUrl = URL.createObjectURL(media.blob)
-            objectUrls.push(objectUrl)
-            urlsById.set(mediaId, objectUrl)
-          } catch {
-            failedCount += 1
-          }
-        }
-
-        if (disposed) {
-          for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl)
-          objectUrls.length = 0
-          return
-        }
-
         const photos: PhotoRowsItem[] = []
+
         nodeAttributes.forEach((attributes, index) => {
-          const media = recordsById.get(attributes.mediaId)
-          const src = urlsById.get(attributes.mediaId)
+          const media = mediaById.get(attributes.mediaId)
           if (!attributes.mediaId || !media) {
             missingCount += 1
             return
           }
-          if (!src) return
 
           photos.push({
             key: `${attributes.mediaId}-${index}`,
             mediaId: attributes.mediaId,
-            src,
+            src: media.url,
             width: positiveDimension(media.width),
             height: positiveDimension(media.height),
             alt: attributes.alt ?? '',
@@ -149,7 +133,7 @@ function useImageGroup(nodes: readonly RichContent[]): ImageGroupLoadState {
           status: 'ready',
           photos,
           missingCount,
-          failedCount,
+          failedCount: 0,
         })
       })
       .catch(() => {
@@ -158,7 +142,7 @@ function useImageGroup(nodes: readonly RichContent[]): ImageGroupLoadState {
 
     return () => {
       disposed = true
-      for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl)
+      for (const release of releases) release()
     }
   }, [nodes])
 

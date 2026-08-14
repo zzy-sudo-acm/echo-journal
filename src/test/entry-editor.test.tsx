@@ -16,6 +16,12 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
   }
 }
 
+/** Dirty the form through the title input (ProseMirror content can't be
+ *  driven by fireEvent in jsdom; the dirty-tracking path is identical). */
+function modifyTitle(value = '新标题') {
+  fireEvent.change(screen.getByPlaceholderText('给这一刻起个名字'), { target: { value } })
+}
+
 describe('EntryEditor', () => {
   beforeEach(() => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
@@ -37,13 +43,11 @@ describe('EntryEditor', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  it('shows confirm dialog when content was modified', async () => {
+  it('shows confirm dialog when the form was modified', async () => {
     const onClose = vi.fn()
     render(<EntryEditor entry={makeEntry()} onSave={vi.fn()} onClose={onClose} />)
 
-    const textarea = screen.getByPlaceholderText('写下此刻…')
-    fireEvent.change(textarea, { target: { value: '修改后的内容' } })
-
+    modifyTitle()
     fireEvent.click(screen.getByLabelText('关闭编辑器'))
 
     await waitFor(() => {
@@ -51,12 +55,12 @@ describe('EntryEditor', () => {
     })
   })
 
-  it('shows confirm dialog when title was modified', async () => {
+  it('shows confirm dialog when the date was modified', async () => {
     const onClose = vi.fn()
     render(<EntryEditor entry={makeEntry()} onSave={vi.fn()} onClose={onClose} />)
 
-    const titleInput = screen.getByPlaceholderText('给这一刻起个名字')
-    fireEvent.change(titleInput, { target: { value: '新标题' } })
+    const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    fireEvent.input(dateInput, { target: { value: '2026-07-19T08:30' } })
 
     fireEvent.click(screen.getByLabelText('关闭编辑器'))
     await waitFor(() => {
@@ -68,8 +72,7 @@ describe('EntryEditor', () => {
     const onClose = vi.fn()
     render(<EntryEditor entry={makeEntry()} onSave={vi.fn()} onClose={onClose} />)
 
-    const textarea = screen.getByPlaceholderText('写下此刻…')
-    fireEvent.change(textarea, { target: { value: '修改' } })
+    modifyTitle()
     fireEvent.click(screen.getByLabelText('关闭编辑器'))
 
     await waitFor(() => {
@@ -79,15 +82,14 @@ describe('EntryEditor', () => {
     fireEvent.click(screen.getByText('继续编辑'))
     // Editor should still be open, onClose not called
     expect(onClose).not.toHaveBeenCalled()
-    expect(screen.getByDisplayValue('修改')).toBeTruthy()
+    expect(screen.getByDisplayValue('新标题')).toBeTruthy()
   })
 
   it('clicking confirm overlay only closes the confirm dialog', async () => {
     const onClose = vi.fn()
     render(<EntryEditor entry={makeEntry()} onSave={vi.fn()} onClose={onClose} />)
 
-    const textarea = screen.getByPlaceholderText('写下此刻…')
-    fireEvent.change(textarea, { target: { value: '修改' } })
+    modifyTitle()
     fireEvent.click(screen.getByLabelText('关闭编辑器'))
 
     await waitFor(() => {
@@ -97,15 +99,14 @@ describe('EntryEditor', () => {
     fireEvent.click(document.querySelector('.confirm-overlay')!)
     // Editor should still be open
     expect(onClose).not.toHaveBeenCalled()
-    expect(screen.getByDisplayValue('修改')).toBeTruthy()
+    expect(screen.getByDisplayValue('新标题')).toBeTruthy()
   })
 
   it('"放弃修改" calls onClose', async () => {
     const onClose = vi.fn()
     render(<EntryEditor entry={makeEntry()} onSave={vi.fn()} onClose={onClose} />)
 
-    const textarea = screen.getByPlaceholderText('写下此刻…')
-    fireEvent.change(textarea, { target: { value: '修改' } })
+    modifyTitle()
     fireEvent.click(screen.getByLabelText('关闭编辑器'))
 
     await waitFor(() => {
@@ -122,15 +123,14 @@ describe('EntryEditor', () => {
 
     render(<EntryEditor entry={makeEntry()} onSave={onSave} onClose={onClose} />)
 
-    const textarea = screen.getByPlaceholderText('写下此刻…')
-    fireEvent.change(textarea, { target: { value: '保存的内容' } })
-
+    modifyTitle('保存的标题')
     fireEvent.click(screen.getByText('保存'))
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalled()
       expect(onClose).toHaveBeenCalledTimes(1)
     })
+    expect(screen.queryByText('尚有未保存的修改，确定要放弃吗？')).toBeNull()
   })
 
   it('saves with empty title as empty string', async () => {

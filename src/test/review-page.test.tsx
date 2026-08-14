@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { ReviewPage } from '../pages/ReviewPage'
@@ -36,6 +36,18 @@ describe('ReviewPage', () => {
     return entryRepo.create({ content, createdAt: date.toISOString() })
   }
 
+  /** Open the entry's action sheet (via its 更多操作 button) and tap 删除. */
+  const requestDelete = (content: string) => {
+    const article = screen.getByText(content).closest('article')!
+    fireEvent.click(within(article).getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByText('删除'))
+  }
+
+  /** Confirm deletion in the dialog that follows the action sheet. */
+  const confirmDelete = () => {
+    fireEvent.click(screen.getAllByText('删除').pop()!)
+  }
+
   it('shows empty state when no past entries', async () => {
     renderReviewPage()
     await waitFor(() => {
@@ -48,12 +60,8 @@ describe('ReviewPage', () => {
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('过去的日记')).toBeTruthy() })
 
-    // Open actions -> delete
-    fireEvent.click(screen.getByText('过去的日记').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
-
-    const confirmBtns = screen.getAllByText('删除')
-    fireEvent.click(confirmBtns[confirmBtns.length - 1])
+    requestDelete('过去的日记')
+    confirmDelete()
 
     await waitFor(() => {
       expect(screen.getByText('已移入回收站')).toBeTruthy()
@@ -65,9 +73,8 @@ describe('ReviewPage', () => {
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('待恢复日记')).toBeTruthy() })
 
-    fireEvent.click(screen.getByText('待恢复日记').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
-    fireEvent.click(screen.getAllByText('删除').pop()!)
+    requestDelete('待恢复日记')
+    confirmDelete()
 
     await waitFor(() => { expect(screen.getByText('撤销')).toBeTruthy() })
     fireEvent.click(screen.getByText('撤销'))
@@ -85,12 +92,11 @@ describe('ReviewPage', () => {
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('失败日记')).toBeTruthy() })
 
-    fireEvent.click(screen.getByText('失败日记').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
-    fireEvent.click(screen.getAllByText('删除').pop()!)
+    requestDelete('失败日记')
+    confirmDelete()
 
     await waitFor(() => {
-      expect(screen.getByText('删除失败')).toBeTruthy()
+      expect(screen.getByText('删除失败，请重试')).toBeTruthy()
     })
 
     // Entry should still be visible (not removed on failure)
@@ -100,19 +106,17 @@ describe('ReviewPage', () => {
     deleteSpy.mockRestore()
   })
 
-  it('still shows toast when delete succeeds but loadReview fails', async () => {
-    // Create entry so loadReview will have data
+  it('still shows toast when delete succeeds but the refresh fails', async () => {
     await createReviewEntry('刷新失败日记', -1)
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('刷新失败日记')).toBeTruthy() })
 
-    // Spy on loadReview's underlying dependency to make it fail after delete
+    // Make the liveQuery re-run that follows the delete fail.
     const loadSpy = vi.spyOn(entryRepo, 'getOnThisDay')
       .mockRejectedValueOnce(new Error('refresh fail'))
 
-    fireEvent.click(screen.getByText('刷新失败日记').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
-    fireEvent.click(screen.getAllByText('删除').pop()!)
+    requestDelete('刷新失败日记')
+    confirmDelete()
 
     // Delete succeeded, toast should show success
     await waitFor(() => {
@@ -127,10 +131,8 @@ describe('ReviewPage', () => {
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('恢复测试')).toBeTruthy() })
 
-    // Delete
-    fireEvent.click(screen.getByText('恢复测试').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
-    fireEvent.click(screen.getAllByText('删除').pop()!)
+    requestDelete('恢复测试')
+    confirmDelete()
 
     await waitFor(() => { expect(screen.getByText('撤销')).toBeTruthy() })
 
@@ -151,8 +153,7 @@ describe('ReviewPage', () => {
     renderReviewPage()
     await waitFor(() => { expect(screen.getByText('一条日记')).toBeTruthy() })
 
-    fireEvent.click(screen.getByText('一条日记').closest('article')!)
-    fireEvent.click(screen.getByText('删除'))
+    requestDelete('一条日记')
 
     const confirmBtns = screen.getAllByText('删除')
     const confirmBtn = confirmBtns[confirmBtns.length - 1]

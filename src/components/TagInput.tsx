@@ -31,7 +31,8 @@ export function TagInput({ tags, onChange, placeholder = '添加标签', autoFoc
       {tags.map((tag) => (
         <span key={tag} className="editable-tag">#{tag}<button type="button" aria-label={`移除标签 ${tag}`} onClick={() => onChange(tags.filter((item) => item !== tag))}><XIcon /></button></span>
       ))}
-      <input type="text" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} onBlur={addTag} placeholder={tags.length ? '' : placeholder} aria-label={placeholder} autoFocus={autoFocus} />
+      {/* Tags are only committed via Enter/comma; blur keeps the pending input so mobile keyboard dismissal never adds stray tags. */}
+      <input type="text" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} placeholder={tags.length ? '' : placeholder} aria-label={placeholder} autoFocus={autoFocus} />
     </div>
   )
 }

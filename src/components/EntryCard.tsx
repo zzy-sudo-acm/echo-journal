@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent, MouseEvent, TouchEvent } from 'react'
 import type { Entry } from '../db/models'
 import { CopyIcon, EditIcon, MoreIcon, TrashIcon, XIcon } from './Icons'
 import { JournalRenderer } from './rich-text/JournalRenderer'
+import { OverlayBase } from './ui/Overlay'
 
 interface EntryCardProps {
   entry: Entry
@@ -14,7 +16,35 @@ const LONG_ENTRY_LENGTH = 320
 const LONG_PRESS_MS = 480
 const MOVE_THRESHOLD = 10
 
-export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps) {
+/**
+ * Copy with a legacy fallback: the async clipboard API rejects in insecure
+ * contexts, so fall back to a temporary textarea + execCommand. Returns
+ * whether the copy succeeded so callers only toast on real success.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Fall through to the legacy path below.
+  }
+  try {
+    const helper = document.createElement('textarea')
+    helper.value = text
+    helper.setAttribute('readonly', '')
+    helper.style.position = 'fixed'
+    helper.style.top = '-9999px'
+    document.body.appendChild(helper)
+    helper.select()
+    const copied = document.execCommand('copy')
+    helper.remove()
+    return copied
+  } catch {
+    return false
+  }
+}
+
+export const EntryCard = memo(function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps) {
   const [showActions, setShowActions] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -28,73 +58,127 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
   const isLong = entry.content.length > LONG_ENTRY_LENGTH
   const showRichContent = Boolean(entry.richContent) && (!isLong || expanded)
 
-  const clearLongPressTimer = () => {
+  const clearLongPressTimer = useCallback(() => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
-  }
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => clearLongPressTimer()
-  }, [])
+  }, [clearLongPressTimer])
 
-  const startLongPress = (clientX: number, clientY: number) => {
+  const closeActions = useCallback(() => setShowActions(false), [])
+
+  const startLongPress = useCallback((clientX: number, clientY: number) => {
     touchStart.current = { x: clientX, y: clientY }
     clearLongPressTimer()
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null
       setShowActions(true)
     }, LONG_PRESS_MS)
-  }
+  }, [clearLongPressTimer])
 
-  const checkLongPressMove = (clientX: number, clientY: number) => {
+  const checkLongPressMove = useCallback((clientX: number, clientY: number) => {
     if (!touchStart.current || !longPressTimer.current) return
     const dx = Math.abs(clientX - touchStart.current.x)
     const dy = Math.abs(clientY - touchStart.current.y)
     if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
       clearLongPressTimer()
     }
-  }
+  }, [clearLongPressTimer])
 
-  const cancelLongPress = () => {
+  const cancelLongPress = useCallback(() => {
     touchStart.current = null
     clearLongPressTimer()
-  }
+  }, [clearLongPressTimer])
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(entry.content)
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+    startLongPress(touch.clientX, touch.clientY)
+  }, [startLongPress])
+
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+    checkLongPressMove(touch.clientX, touch.clientY)
+  }, [checkLongPressMove])
+
+  const handleContextMenu = useCallback((event: MouseEvent<HTMLElement>) => {
+    event.preventDefault()
+    setShowActions(true)
+  }, [])
+
+  const handleCopy = useCallback(async () => {
+    const copied = await copyText(entry.content)
     setShowActions(false)
-    onCopied?.()
-  }
+    if (copied) onCopied?.()
+  }, [entry.content, onCopied])
+
+  const handleEdit = useCallback(() => {
+    setShowActions(false)
+    onEdit(entry)
+  }, [entry, onEdit])
+
+  const handleDelete = useCallback(() => {
+    setShowActions(false)
+    onDelete(entry)
+  }, [entry, onDelete])
+
+  // Single click on a collapsible card toggles the fold; it must not fire
+  // while the user is selecting text or dismissing the action sheet (the
+  // sheet lives in a portal, so its backdrop clicks still bubble here).
+  const toggleExpanded = useCallback(() => {
+    if (showActions) return
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed) return
+    setExpanded((value) => !value)
+  }, [showActions])
+
+  const handleExpandKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      setExpanded((value) => !value)
+    }
+  }, [])
+
+  const handleExpandButtonClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    setExpanded((value) => !value)
+  }, [])
+
+  const handleMoreClick = useCallback((event: MouseEvent<SVGSVGElement>) => {
+    event.stopPropagation()
+    setShowActions(true)
+  }, [])
+
+  const handleMoreKeyDown = useCallback((event: KeyboardEvent<SVGSVGElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.stopPropagation()
+      setShowActions(true)
+    }
+  }, [])
 
   return (
     <article
       className="entry-row"
-      tabIndex={0}
-      aria-label={`${time} 的日记，点击显示操作`}
-      onClick={() => setShowActions(true)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          setShowActions(true)
-        }
-      }}
-      onTouchStart={(event) => {
-        const touch = event.touches[0]
-        startLongPress(touch.clientX, touch.clientY)
-      }}
-      onTouchMove={(event) => {
-        const touch = event.touches[0]
-        checkLongPressMove(touch.clientX, touch.clientY)
-      }}
+      {...(isLong
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            'aria-expanded': expanded,
+            'aria-label': `${time} 的日记，点击${expanded ? '收起' : '展开全文'}`,
+            onClick: toggleExpanded,
+            onKeyDown: handleExpandKeyDown,
+          }
+        : {})}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={cancelLongPress}
       onTouchCancel={cancelLongPress}
-      onContextMenu={(event) => {
-        event.preventDefault()
-        setShowActions(true)
-      }}
+      onContextMenu={handleContextMenu}
     >
       <div className="entry-time">{time}</div>
       <div className="entry-main">
@@ -110,10 +194,7 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
           <button
             type="button"
             className="entry-expand"
-            onClick={(event) => {
-              event.stopPropagation()
-              setExpanded((value) => !value)
-            }}
+            onClick={handleExpandButtonClick}
           >
             {expanded ? '收起' : '展开全文'}
           </button>
@@ -124,23 +205,34 @@ export function EntryCard({ entry, onEdit, onDelete, onCopied }: EntryCardProps)
           </div>
         ) : null}
       </div>
-      <MoreIcon className="entry-more" />
+      <MoreIcon
+        className="entry-more"
+        role="button"
+        tabIndex={0}
+        aria-label="更多操作"
+        aria-hidden={false}
+        onClick={handleMoreClick}
+        onKeyDown={handleMoreKeyDown}
+      />
 
       {showActions ? (
-        <div className="entry-action-overlay" onClick={(event) => { event.stopPropagation(); setShowActions(false) }}>
-          <div className="entry-action-sheet" role="dialog" aria-modal="true" aria-label="日记操作" onClick={(event) => event.stopPropagation()}>
-            <div className="action-sheet-header">
-              <span>{time}</span>
-              <button type="button" className="icon-button" aria-label="关闭操作菜单" onClick={() => setShowActions(false)}><XIcon /></button>
-            </div>
-            <div className="action-sheet-actions">
-              <button type="button" onClick={handleCopy}><CopyIcon /><span>复制</span></button>
-              <button type="button" onClick={() => { setShowActions(false); onEdit(entry) }}><EditIcon /><span>编辑与时间</span></button>
-              <button type="button" className="danger-action" onClick={() => { setShowActions(false); onDelete(entry) }}><TrashIcon /><span>删除</span></button>
-            </div>
+        <OverlayBase
+          onClose={closeActions}
+          overlayClassName="entry-action-overlay"
+          panelClassName="entry-action-sheet"
+          ariaLabel="日记操作"
+        >
+          <div className="action-sheet-header">
+            <span>{time}</span>
+            <button type="button" className="icon-button" aria-label="关闭操作菜单" onClick={closeActions}><XIcon /></button>
           </div>
-        </div>
+          <div className="action-sheet-actions">
+            <button type="button" onClick={handleCopy}><CopyIcon /><span>复制</span></button>
+            <button type="button" onClick={handleEdit}><EditIcon /><span>编辑与时间</span></button>
+            <button type="button" className="danger-action" onClick={handleDelete}><TrashIcon /><span>删除</span></button>
+          </div>
+        </OverlayBase>
       ) : null}
     </article>
   )
-}
+})
