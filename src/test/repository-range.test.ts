@@ -83,10 +83,45 @@ describe('repository range queries', () => {
       expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(false)
     })
 
-    it('is true when something older exists (even trashed)', async () => {
+    it('is false when only old trashed entries exist', async () => {
       const old = await entryRepo.create({ content: '旧', createdAt: daysAgoISO(30) })
       await entryRepo.delete(old.id)
+      expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(false)
+    })
+
+    it('is false when only old drafts exist', async () => {
+      await entryRepo.create({ content: '旧草稿', isDraft: true, createdAt: daysAgoISO(30) })
+      expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(false)
+    })
+
+    it('is true when an old active entry exists', async () => {
+      await entryRepo.create({ content: '旧', createdAt: daysAgoISO(30) })
       expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(true)
+    })
+
+    it('is false when the only old entry is trashed, even with newer active ones', async () => {
+      const old = await entryRepo.create({ content: '旧已删', createdAt: daysAgoISO(30) })
+      await entryRepo.delete(old.id)
+      await entryRepo.create({ content: '新', createdAt: daysAgoISO(2) })
+      expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(false)
+    })
+
+    it('matches listRecentDays at the window boundary', async () => {
+      // Exactly at the window-start local midnight → INSIDE the window.
+      const inside = await entryRepo.create({ content: '边界内', createdAt: daysAgoISO(6, 0) })
+      // One hour before the window start → OUTSIDE.
+      const outside = await entryRepo.create({ content: '边界外', createdAt: daysAgoISO(7, 23) })
+
+      const recentIds = (await entryRepo.listRecentDays(7)).map((entry) => entry.id)
+      expect(recentIds).toContain(inside.id)
+      expect(recentIds).not.toContain(outside.id)
+
+      // The outside entry is active, so there IS something displayable beyond.
+      expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(true)
+
+      // Trash it and nothing displayable remains beyond the window.
+      await entryRepo.delete(outside.id)
+      expect(await entryRepo.hasEntriesBeyondDays(7)).toBe(false)
     })
 
     it('is false for an empty database', async () => {

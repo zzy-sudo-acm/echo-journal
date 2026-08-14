@@ -284,13 +284,20 @@ export const entryRepo = {
     return active
   },
 
-  /** Whether anything (incl. drafts/trash) exists older than `days` ago — drives "load earlier". */
+  /** Whether any displayable (active, non-draft) entry exists older than the
+   *  recent window — drives "load earlier". Must match listRecentDays
+   *  semantics: drafts and trashed entries don't count. Scans the createdAt
+   *  index below the window start and stops at the first match. */
   async hasEntriesBeyondDays(days: number): Promise<boolean> {
     const start = new Date()
     start.setDate(start.getDate() - (days - 1))
     const [startISO] = localDayBounds(start)
-    const oldest = await db.entries.orderBy('createdAt').first()
-    return Boolean(oldest && oldest.createdAt < startISO)
+    const oldestDisplayable = await db.entries
+      .where('createdAt')
+      .below(startISO)
+      .filter((entry) => isActive(entry) && !entry.isDraft)
+      .first()
+    return Boolean(oldestDisplayable)
   },
 
   /** Active entries on one local date (YYYY-MM-DD), ascending by createdAt. */

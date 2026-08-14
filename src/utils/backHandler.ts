@@ -13,6 +13,10 @@ import { Capacitor } from '@capacitor/core'
 interface OverlayRegistration {
   id: symbol
   close: () => void
+  /** True while a close request is in flight — bridges the gap between
+   *  close() and the eventual unregister() so a rapid second back press
+   *  cannot fire the same overlay's close twice. */
+  closing: boolean
 }
 
 const overlayStack: OverlayRegistration[] = []
@@ -27,7 +31,7 @@ export interface OverlayHandle {
 /** Register an overlay closer; returns a handle with unregister + isTop. */
 export function registerOverlay(close: () => void): OverlayHandle {
   const id = Symbol('overlay')
-  overlayStack.push({ id, close })
+  overlayStack.push({ id, close, closing: false })
   return {
     unregister: () => {
       const index = overlayStack.findIndex((overlay) => overlay.id === id)
@@ -37,13 +41,27 @@ export function registerOverlay(close: () => void): OverlayHandle {
   }
 }
 
-/** Close the topmost overlay. Returns true if one was open. */
+/**
+ * Close the topmost overlay. Returns true if one is open (including a close
+ * already in flight, which is swallowed so back does not fall through).
+ *
+ * The entry STAYS on the stack until the overlay actually unmounts and calls
+ * unregister(): a close can be blocked (e.g. the editor's unsaved-changes
+ * confirm), and popping early would leave the still-visible overlay
+ * unreachable by the back button. The `closing` flag alone guards against
+ * double-firing and is released on the next microtask — by then a real
+ * unmount has unregistered the entry, and a blocked close is ready to be
+ * requested again.
+ */
 export function closeTopOverlay(): boolean {
-  // Pop first: the closer re-renders asynchronously, and without popping a
-  // rapid second back press would close the same overlay twice.
-  const top = overlayStack.pop()
+  const top = overlayStack[overlayStack.length - 1]
   if (!top) return false
+  if (top.closing) return true
+  top.closing = true
   top.close()
+  queueMicrotask(() => {
+    top.closing = false
+  })
   return true
 }
 
