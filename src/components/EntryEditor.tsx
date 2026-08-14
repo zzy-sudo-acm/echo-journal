@@ -314,13 +314,20 @@ export function EntryEditor({ entry, onSave, onClose }: EntryEditorProps) {
     }
   }
 
-  const handleClose = () => {
-    if (saving || discarding) return
+  /**
+   * Close request (X button, 取消, Escape, hardware back). Returns whether the
+   * editor will actually unmount: false when blocked — unsaved changes route
+   * to the confirm dialog, busy states are ignored — true when closing.
+   * The backHandler closing lifecycle relies on this being honest.
+   */
+  const handleClose = (): boolean => {
+    if (saving || discarding) return false
     if (hasChanges) {
       setShowCloseConfirm(true)
-    } else {
-      void discardAndClose()
+      return false
     }
+    void discardAndClose()
+    return true
   }
 
   saveRef.current = () => void handleSave()

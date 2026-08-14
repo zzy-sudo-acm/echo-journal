@@ -11,7 +11,7 @@ const FOCUSABLE_SELECTOR =
  * focus trap, and focus restoration. Only the topmost overlay responds to
  * keys, so nested overlays (confirm over editor) behave correctly.
  */
-function useOverlayLifecycle(onClose: () => void, containerRef: RefObject<HTMLElement | null>) {
+function useOverlayLifecycle(onClose: () => boolean | void, containerRef: RefObject<HTMLElement | null>) {
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
@@ -65,7 +65,10 @@ function useOverlayLifecycle(onClose: () => void, containerRef: RefObject<HTMLEl
 }
 
 interface BaseOverlayProps {
-  onClose: () => void
+  /** Close request. Return false to refuse (stay mounted); anything else
+   *  (including void) means the overlay will unmount. The return drives the
+   *  hardware-back closing lifecycle. */
+  onClose: () => boolean | void
   children: ReactNode
   /** Classes on the dimmed backdrop element. */
   overlayClassName: string
@@ -113,7 +116,9 @@ export function OverlayBase({
 }
 
 interface OverlayProps {
-  onClose: () => void
+  /** Close request. Return false to refuse (stay mounted); anything else
+   *  (including void) means the overlay will unmount. */
+  onClose: () => boolean | void
   children: ReactNode
   /** Extra class on the panel element. */
   className?: string

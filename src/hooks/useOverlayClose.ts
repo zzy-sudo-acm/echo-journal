@@ -6,7 +6,7 @@ import { registerOverlay } from '../utils/backHandler'
  * hardware-back/Escape trigger onClose while this overlay is topmost.
  * No focus trap — the component keeps managing its own focus.
  */
-export function useOverlayClose(onClose: () => void) {
+export function useOverlayClose(onClose: () => boolean | void) {
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 

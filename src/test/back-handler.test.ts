@@ -5,24 +5,28 @@ import {
   registerOverlay,
 } from '../utils/backHandler'
 
-/** closeTopOverlay releases its in-flight guard on a microtask. */
-async function flushClosingGuard() {
-  await Promise.resolve()
+/**
+ * Hardware back presses arrive as separate events (separate JS tasks), so
+ * every test that matters awaits a real task boundary instead of calling
+ * closeTopOverlay twice inside one synchronous stack.
+ */
+async function nextBackPress() {
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('backHandler overlay stack', () => {
   it('closes overlays in LIFO order', async () => {
     const calls: string[] = []
-    const first = registerOverlay(() => calls.push('first'))
-    const second = registerOverlay(() => calls.push('second'))
-    const third = registerOverlay(() => calls.push('third'))
+    const first = registerOverlay(() => { calls.push('first') })
+    const second = registerOverlay(() => { calls.push('second') })
+    const third = registerOverlay(() => { calls.push('third') })
 
     expect(closeTopOverlay()).toBe(true)
     expect(calls).toEqual(['third'])
 
     // A real close unmounts the overlay, which unregisters it.
     third.unregister()
-    await flushClosingGuard()
+    await nextBackPress()
 
     expect(closeTopOverlay()).toBe(true)
     expect(calls).toEqual(['third', 'second'])
@@ -32,63 +36,87 @@ describe('backHandler overlay stack', () => {
     expect(overlayDepth()).toBe(0)
   })
 
-  it('swallows a rapid second press while a close is in flight', async () => {
-    const closer = vi.fn()
+  it('does not re-fire close across separate back events while unmount is pending', async () => {
+    const closer = vi.fn(() => true)
     const handle = registerOverlay(closer)
 
     expect(closeTopOverlay()).toBe(true)
-    // The overlay is still mounted (close in flight) — a fast second back
-    // press must not fire close() again nor fall through to app navigation.
+    expect(closer).toHaveBeenCalledTimes(1)
+
+    // The overlay has not unmounted yet (no unregister) — later back presses
+    // in later tasks are absorbed, not re-fired, and never fall through.
+    await nextBackPress()
+    expect(closeTopOverlay()).toBe(true)
+    await nextBackPress()
     expect(closeTopOverlay()).toBe(true)
     expect(closer).toHaveBeenCalledTimes(1)
 
     handle.unregister()
-    await flushClosingGuard()
     expect(overlayDepth()).toBe(0)
   })
 
-  it('keeps a blocked close on the stack and lets it be requested again', async () => {
-    // Editor whose close is blocked by unsaved changes: close() runs but the
-    // overlay stays mounted, so no unregister() happens.
-    const editorClose = vi.fn()
-    const editor = registerOverlay(editorClose)
+  it('unregisters cleanly after a real close: no ghost entries, back falls through', async () => {
+    const closer = vi.fn(() => true)
+    const handle = registerOverlay(closer)
 
     expect(closeTopOverlay()).toBe(true)
-    expect(editorClose).toHaveBeenCalledTimes(1)
-    expect(overlayDepth()).toBe(1)
+    expect(closer).toHaveBeenCalledTimes(1)
 
-    await flushClosingGuard()
+    handle.unregister()
+    await nextBackPress()
+
+    // Nothing remains on the stack — the next back reaches navigation again.
+    expect(overlayDepth()).toBe(0)
+    expect(closeTopOverlay()).toBe(false)
+  })
+
+  it('lets a refused close (returns false) be requested again on the next press', async () => {
+    const closer = vi.fn()
+      .mockReturnValueOnce(false) // blocked, stays mounted
+      .mockReturnValue(true)      // later attempt actually closes
+    const handle = registerOverlay(closer)
+
     expect(closeTopOverlay()).toBe(true)
-    expect(editorClose).toHaveBeenCalledTimes(2)
-    expect(overlayDepth()).toBe(1)
+    expect(closer).toHaveBeenCalledTimes(1)
 
-    editor.unregister()
+    await nextBackPress()
+    expect(closeTopOverlay()).toBe(true)
+    expect(closer).toHaveBeenCalledTimes(2)
+
+    handle.unregister()
     expect(overlayDepth()).toBe(0)
   })
 
-  it('restores the blocked editor as top after its confirm dialog is dismissed', async () => {
-    // The full editor → confirm → cancel → editor flow:
+  it('editor blocked → confirm dialog top → dialog dismissed → editor re-closable', async () => {
+    // EntryEditor semantics: a close blocked by unsaved changes returns false
+    // and opens the confirm dialog, which registers on top.
     const editorClose = vi.fn()
+      .mockReturnValueOnce(false) // blocked: unsaved changes
+      .mockReturnValue(true)
     const editor = registerOverlay(editorClose)
 
-    // 1. Back with unsaved changes: editor close is requested but blocked,
-    //    and a confirm dialog opens on top.
+    // 1. Back: editor close attempted and blocked; editor stays on the stack.
     expect(closeTopOverlay()).toBe(true)
     expect(editorClose).toHaveBeenCalledTimes(1)
-    await flushClosingGuard()
+    expect(overlayDepth()).toBe(1)
+    await nextBackPress()
 
-    const confirmClose = vi.fn()
+    // 2. ConfirmDialog finishes mounting and registers as the new top.
+    const confirmClose = vi.fn(() => true)
     const confirm = registerOverlay(confirmClose)
     expect(confirm.isTop()).toBe(true)
     expect(editor.isTop()).toBe(false)
 
-    // 2. Back dismisses the confirm (same as tapping 取消): it unmounts.
+    // 3. While the dialog exists, back presses only reach it.
+    await nextBackPress()
     expect(closeTopOverlay()).toBe(true)
     expect(confirmClose).toHaveBeenCalledTimes(1)
-    confirm.unregister()
-    await flushClosingGuard()
+    expect(editorClose).toHaveBeenCalledTimes(1)
 
-    // 3. The editor is top again and back re-triggers its close confirm.
+    // 4. Dialog 取消 → unmount → unregister: editor is top again and
+    //    immediately responds to the next back press.
+    confirm.unregister()
+    await nextBackPress()
     expect(editor.isTop()).toBe(true)
     expect(closeTopOverlay()).toBe(true)
     expect(editorClose).toHaveBeenCalledTimes(2)

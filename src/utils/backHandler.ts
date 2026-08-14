@@ -12,10 +12,11 @@ import { Capacitor } from '@capacitor/core'
 
 interface OverlayRegistration {
   id: symbol
-  close: () => void
-  /** True while a close request is in flight — bridges the gap between
-   *  close() and the eventual unregister() so a rapid second back press
-   *  cannot fire the same overlay's close twice. */
+  /** Closes the overlay. Returns false when the close was refused/blocked
+   *  (the overlay stays mounted); true or void means unmount is pending. */
+  close: () => boolean | void
+  /** True from a confirmed close request until unregister(). Absorbs any
+   *  number of back presses during the async unmount window. */
   closing: boolean
 }
 
@@ -29,7 +30,7 @@ export interface OverlayHandle {
 }
 
 /** Register an overlay closer; returns a handle with unregister + isTop. */
-export function registerOverlay(close: () => void): OverlayHandle {
+export function registerOverlay(close: () => boolean | void): OverlayHandle {
   const id = Symbol('overlay')
   overlayStack.push({ id, close, closing: false })
   return {
@@ -42,26 +43,23 @@ export function registerOverlay(close: () => void): OverlayHandle {
 }
 
 /**
- * Close the topmost overlay. Returns true if one is open (including a close
- * already in flight, which is swallowed so back does not fall through).
+ * Close the topmost overlay. Returns true whenever an overlay is open
+ * (including a close already in flight), so back never falls through to
+ * keyboard/navigation/minimize while anything is displayed.
  *
- * The entry STAYS on the stack until the overlay actually unmounts and calls
- * unregister(): a close can be blocked (e.g. the editor's unsaved-changes
- * confirm), and popping early would leave the still-visible overlay
- * unreachable by the back button. The `closing` flag alone guards against
- * double-firing and is released on the next microtask — by then a real
- * unmount has unregistered the entry, and a blocked close is ready to be
- * requested again.
+ * The `closing` lifecycle is event-driven, never time-based:
+ *  - armed only when close() reports a real close (returns true/void);
+ *  - released only by unregister() when the overlay actually unmounts —
+ *    the stack entry is removed with it, leaving no ghost state;
+ *  - a refused/blocked close (returns false, e.g. the editor's
+ *    unsaved-changes confirm or a busy dialog) never arms it, so the
+ *    still-visible overlay stays on the stack and immediately re-closable.
  */
 export function closeTopOverlay(): boolean {
   const top = overlayStack[overlayStack.length - 1]
   if (!top) return false
   if (top.closing) return true
-  top.closing = true
-  top.close()
-  queueMicrotask(() => {
-    top.closing = false
-  })
+  top.closing = top.close() !== false
   return true
 }
 

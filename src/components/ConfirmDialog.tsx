@@ -20,7 +20,17 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Dialog onClose={() => { if (!confirming) onCancel() }} role="alertdialog" ariaLabel={message}>
+    <Dialog
+      onClose={() => {
+        // A confirm-in-progress refuses to close; the back stack must not
+        // treat it as closing (it unmounts when the operation settles).
+        if (confirming) return false
+        onCancel()
+        return true
+      }}
+      role="alertdialog"
+      ariaLabel={message}
+    >
       <p>{message}</p>
       <div className="btn-group">
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={confirming}>
