@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { db } from '../db/database'
-import { entryRepo, draftRepo, tagRepo } from '../db/repository'
+import { clearAllData, cleanupOrphanMedia, entryRepo, draftRepo, mediaRepo, tagRepo } from '../db/repository'
 import { getLocalDateString } from '../utils/date'
 
 describe('Entry Repository', () => {
@@ -321,5 +321,74 @@ describe('Tag Repository', () => {
     const entries = await entryRepo.list()
     expect(entries[0].tags).toContain('new')
     expect(entries[0].tags).not.toContain('old')
+  })
+})
+
+describe('clearAllData', () => {
+  beforeEach(async () => {
+    await db.entries.clear()
+    await db.drafts.clear()
+    await db.tags.clear()
+    await db.snapshots.clear()
+    await db.media.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('clears entries, drafts, tags, snapshots and media in one transaction', async () => {
+    await entryRepo.create({ content: 'a', tags: ['t'] })
+    await draftRepo.save({ content: 'draft', title: '', tags: [] })
+    await db.snapshots.put({ id: 'snap-1', createdAt: new Date().toISOString(), entryCount: 0, tagCount: 0, size: 1, isPinned: false, data: '{}' })
+    await db.media.put({ id: 'm1', blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1, createdAt: new Date().toISOString() })
+
+    await clearAllData()
+
+    expect(await db.entries.count()).toBe(0)
+    expect(await db.drafts.count()).toBe(0)
+    expect(await db.tags.count()).toBe(0)
+    expect(await db.snapshots.count()).toBe(0)
+    expect(await db.media.count()).toBe(0)
+  })
+
+  it('rolls back every table when one clear fails', async () => {
+    await entryRepo.create({ content: 'a', tags: ['t'] })
+    await draftRepo.save({ content: 'draft', title: '', tags: [] })
+    await db.tags.put({ name: 't' })
+    await db.snapshots.put({ id: 'snap-1', createdAt: new Date().toISOString(), entryCount: 0, tagCount: 0, size: 1, isPinned: false, data: '{}' })
+    await db.media.put({ id: 'm1', blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1, createdAt: new Date().toISOString() })
+
+    vi.spyOn(db.entries, 'clear').mockRejectedValueOnce(new Error('boom'))
+
+    await expect(clearAllData()).rejects.toThrow('boom')
+
+    expect(await db.entries.count()).toBe(1)
+    expect(await db.drafts.count()).toBe(1)
+    expect(await db.tags.count()).toBe(1)
+    expect(await db.snapshots.count()).toBe(1)
+    expect(await db.media.count()).toBe(1)
+  })
+})
+
+describe('cleanupOrphanMedia', () => {
+  beforeEach(async () => {
+    await db.entries.clear()
+    await db.drafts.clear()
+    await db.tags.clear()
+    await db.snapshots.clear()
+    await db.media.clear()
+  })
+
+  it('deletes media referenced by nothing', async () => {
+    const media = await mediaRepo.create({ blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1 })
+
+    expect(await cleanupOrphanMedia([media.id])).toBe(1)
+    expect(await mediaRepo.get(media.id)).toBeNull()
+  })
+
+  it('keeps media referenced by the quick-composer draft', async () => {
+    const media = await mediaRepo.create({ blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1 })
+    await draftRepo.save({ content: '带图草稿', title: '', tags: [], mediaIds: [media.id] })
+
+    expect(await cleanupOrphanMedia([media.id])).toBe(0)
+    expect(await mediaRepo.get(media.id)).not.toBeNull()
   })
 })

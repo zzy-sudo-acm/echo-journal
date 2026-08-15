@@ -14,6 +14,8 @@ interface CalendarProps {
   rangeStart?: string | null
   rangeEnd?: string | null
   selectable?: boolean
+  /** Local YYYY-MM-DD of "today"; keeps the mark fresh across midnight. */
+  today?: string
 }
 
 const DAY_HEADERS = ['日', '一', '二', '三', '四', '五', '六']
@@ -29,8 +31,9 @@ export function Calendar({
   rangeStart = null,
   rangeEnd = null,
   selectable = true,
+  today,
 }: CalendarProps) {
-  const today = getLocalDateString()
+  const todayDate = today ?? getLocalDateString()
   const touchStart = useRef<{ x: number; y: number } | null>(null)
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
@@ -76,7 +79,7 @@ export function Calendar({
       <div className="calendar-grid">
         {DAY_HEADERS.map((day) => <div key={day} className="calendar-day-header">{day}</div>)}
         {cells.map((cell, index) => {
-          const isToday = cell.date === today
+          const isToday = cell.date === todayDate
           const isSelected = cell.date === selectedDate
           const isRangeEdge = cell.date !== null && (cell.date === rangeStart || cell.date === rangeEnd)
           const isInRange = cell.date !== null && rangeStart !== null && rangeEnd !== null && cell.date >= rangeStart && cell.date <= rangeEnd

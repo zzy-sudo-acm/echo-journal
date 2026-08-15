@@ -6,6 +6,15 @@ import { syncNativeSystemBars } from '../utils/nativeSystemBars'
 export type Theme = 'dark' | 'light'
 export type JournalFont = 'modern' | 'rounded' | 'fangsong' | 'display' | 'handwriting'
 
+const THEME_COLORS: Record<Theme, string> = {
+  dark: '#071927',
+  light: '#faf1dd',
+}
+
+function applyThemeColor(theme: Theme) {
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme])
+}
+
 const journalFonts = new Set<JournalFont>(['modern', 'rounded', 'fangsong', 'display', 'handwriting'])
 let journalFontRequest = 0
 
@@ -34,6 +43,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setTheme: async (theme: Theme) => {
     set({ theme })
     document.documentElement.setAttribute('data-theme', theme)
+    applyThemeColor(theme)
     await Promise.all([
       settingsRepo.set('theme', theme),
       syncNativeSystemBars(theme),
@@ -68,6 +78,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     ])
     const requestedFont = normalizeJournalFont(savedJournalFont)
     document.documentElement.setAttribute('data-theme', theme)
+    applyThemeColor(theme)
     await syncNativeSystemBars(theme)
     const loaded = await loadJournalFont(requestedFont)
     const journalFont = loaded ? requestedFont : 'modern'

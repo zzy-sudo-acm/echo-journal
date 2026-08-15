@@ -3,7 +3,6 @@ import { useEntryStore } from '../store/entryStore'
 import { useTimelineEntries, useHasEarlierEntries } from '../db/live'
 import { useEntryActions } from '../hooks/useEntryActions'
 import { QuickInput } from '../components/QuickInput'
-import { OPEN_FULL_EDITOR_EVENT, consumeFullEditorOpenRequest } from '../utils/events'
 import { TimelineIntro } from '../components/TimelineIntro'
 import { TimelineDayGroup, type TimelineDayVariant } from '../components/TimelineDayGroup'
 import { LazyEntryEditor } from '../components/LazyEntryEditor'
@@ -31,12 +30,10 @@ function formatDateLabel(dateString: string) {
 
 export function TodayPage() {
   const today = useEntryStore((state) => state.todayDate)
-  const createEntry = useEntryStore((state) => state.createEntry)
   const updateEntry = useEntryStore((state) => state.updateEntry)
   const [dayCount, setDayCount] = useState(PAGE_DAYS)
   const entries = useTimelineEntries(dayCount)
   const hasEarlier = useHasEarlierEntries(dayCount)
-  const [creatingEntry, setCreatingEntry] = useState(false)
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null)
   const { deletingEntry, requestDelete, cancelDelete, confirmDelete } = useEntryActions()
   const { showToast } = useToast()
@@ -88,17 +85,6 @@ export function TodayPage() {
     return [...earlierGroups, [today, todayEntries] as const]
   }, [entries, today])
 
-  useEffect(() => {
-    const openFullEditor = () => {
-      consumeFullEditorOpenRequest()
-      setCreatingEntry(true)
-    }
-    // Catch open requests issued before this page mounted (cross-page navigation).
-    if (consumeFullEditorOpenRequest()) setCreatingEntry(true)
-    window.addEventListener(OPEN_FULL_EDITOR_EVENT, openFullEditor)
-    return () => window.removeEventListener(OPEN_FULL_EDITOR_EVENT, openFullEditor)
-  }, [])
-
   // Remember the timeline scroll position when leaving for another tab.
   useEffect(() => {
     return () => {
@@ -124,11 +110,6 @@ export function TodayPage() {
     if (!editingEntry) return
     await updateEntry(editingEntry.id, input)
     showToast('日记已更新', 'success')
-  }
-
-  const handleCreate = async (input: CreateEntryInput) => {
-    await createEntry(input, { clearDraft: false })
-    showToast('日记已记下', 'success')
   }
 
   return (
@@ -170,10 +151,6 @@ export function TodayPage() {
 
       {editingEntry ? (
         <LazyEntryEditor entry={editingEntry} onSave={handleUpdate} onClose={() => setEditingEntry(null)} />
-      ) : null}
-
-      {creatingEntry ? (
-        <LazyEntryEditor onSave={handleCreate} onClose={() => setCreatingEntry(false)} />
       ) : null}
 
       {deletingEntry ? (

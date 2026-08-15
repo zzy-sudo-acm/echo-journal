@@ -7,14 +7,17 @@ import { useEntryStore } from '../store/entryStore'
 import { useEntriesForDate, useMonthEntryDates } from '../db/live'
 import { useEntryActions } from '../hooks/useEntryActions'
 import { useToast } from '../components/ToastContext'
-import { formatLocalDateString, getLocalDateString } from '../utils/date'
+import { formatLocalDateString, parseLocalDateString } from '../utils/date'
 import type { Entry, CreateEntryInput } from '../db/models'
 
 export function CalendarPage() {
-  const today = new Date()
-  const [year, setYear] = useState(today.getFullYear())
-  const [month, setMonth] = useState(today.getMonth())
-  const [selectedDate, setSelectedDate] = useState<string | null>(getLocalDateString(today))
+  // Subscribing to todayDate keeps the calendar's "today" mark and the
+  // initial selection correct when the app stays open across midnight.
+  const todayDate = useEntryStore((state) => state.todayDate)
+  const initialToday = parseLocalDateString(todayDate)
+  const [year, setYear] = useState(initialToday.getFullYear())
+  const [month, setMonth] = useState(initialToday.getMonth())
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayDate)
   const monthDates = useMonthEntryDates(year, month)
   const datesWithEntries = useMemo(() => new Set(monthDates), [monthDates])
   const selectedEntries = useEntriesForDate(selectedDate) ?? []
@@ -40,7 +43,7 @@ export function CalendarPage() {
     <main className="page calendar-page">
       <div className="page-heading"><h1>日历</h1><p>按日期回到某一天</p></div>
       <div className="calendar-layout">
-        <Calendar year={year} month={month} datesWithEntries={datesWithEntries} selectedDate={selectedDate} onSelectDate={setSelectedDate} onPrevMonth={() => moveMonth(-1)} onNextMonth={() => moveMonth(1)} />
+        <Calendar year={year} month={month} today={todayDate} datesWithEntries={datesWithEntries} selectedDate={selectedDate} onSelectDate={setSelectedDate} onPrevMonth={() => moveMonth(-1)} onNextMonth={() => moveMonth(1)} />
         <section className="calendar-entries" aria-live="polite">
           {selectedDate ? <div className="date-divider"><span>{formatLocalDateString(selectedDate, { month: 'long', day: 'numeric', weekday: 'long' })}</span></div> : <p className="timeline-empty">选择一个日期，查看那天的记录。</p>}
           {selectedDate && selectedEntries.length === 0 ? <p className="timeline-empty">这一天没有记录。</p> : null}

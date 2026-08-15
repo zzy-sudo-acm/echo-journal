@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { entryRepo } from '../db/repository'
+import { entryRepo, clearAllData } from '../db/repository'
 import { useUIStore } from '../store/uiStore'
+import { useEntryStore } from '../store/entryStore'
 import { ExportDialog } from '../components/ExportDialog'
 import { ImportDialog } from '../components/ImportDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -9,8 +10,8 @@ import { useToast } from '../components/ToastContext'
 import { getSnapshots, createDailySnapshot, cleanupOldSnapshots, pinSnapshot, deleteSnapshot, restoreFromSnapshot } from '../services/snapshot'
 import { ChevronDownIcon, ChevronRightIcon, ClockIcon, DownloadIcon, PinIcon, ShieldIcon, TrashIcon, UploadIcon } from '../components/Icons'
 import { APP_VERSION, type InternalSnapshot } from '../db/models'
-import { db } from '../db/database'
-import { getLocalDateString, toLocalDate } from '../utils/date'
+import { clearMediaUrlCache } from '../services/mediaCache'
+import { toLocalDate } from '../utils/date'
 import type { JournalFont } from '../store/uiStore'
 import { loadJournalFontPreview } from '../utils/journalFonts'
 
@@ -24,10 +25,13 @@ const fontOptions: Array<{ value: JournalFont; label: string }> = [
 
 export function SettingsPage() {
   const { journalFont, loadingJournalFont, setJournalFont } = useUIStore()
+  // Stays fresh across midnight so the "today snapshot" badge is accurate.
+  const todayDate = useEntryStore((state) => state.todayDate)
   const [readyFontPreviews, setReadyFontPreviews] = useState<Set<JournalFont>>(() => new Set(['modern']))
   const [showExport, setShowExport] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearingData, setClearingData] = useState(false)
   const [restoreSnapshotId, setRestoreSnapshotId] = useState<string | null>(null)
   const [entryCount, setEntryCount] = useState(0)
   const [trashCount, setTrashCount] = useState(0)
@@ -59,14 +63,24 @@ export function SettingsPage() {
   const loadSnapshots = async () => setSnapshots(await getSnapshots())
   useEffect(() => { void Promise.all([loadStats(), loadSnapshots()]) }, [])
 
-  const todaySnapshot = snapshots.some((snapshot) => toLocalDate(snapshot.createdAt) === getLocalDateString())
+  const todaySnapshot = snapshots.some((snapshot) => snapshot.id.startsWith('snap-') && toLocalDate(snapshot.createdAt) === todayDate)
 
   const handleClearData = async () => {
+    setClearingData(true)
     try {
-      await db.entries.clear(); await db.drafts.clear(); await db.tags.clear(); await db.snapshots.clear(); await db.media.clear()
+      // All business tables in one read-write transaction: either every table
+      // is cleared or none of them is, so a mid-way IndexedDB failure cannot
+      // leave a half-cleared journal behind. Settings are kept.
+      await clearAllData()
+      clearMediaUrlCache()
+      setShowClearConfirm(false)
       showToast('所有数据已清除', 'success')
       await Promise.all([loadStats(), loadSnapshots()])
-    } catch { showToast('清除数据失败', 'error') }
+    } catch {
+      showToast('清除数据失败，数据未改动', 'error')
+    } finally {
+      setClearingData(false)
+    }
   }
 
   const handleCreateSnapshot = async () => {
@@ -163,7 +177,7 @@ export function SettingsPage() {
 
       {showExport ? <ExportDialog onClose={() => setShowExport(false)} /> : null}
       {showImport ? <ImportDialog onClose={() => { setShowImport(false); void Promise.all([loadStats(), loadSnapshots()]) }} /> : null}
-      {showClearConfirm ? <ConfirmDialog message="确定要清除全部数据吗？此操作不可撤销。建议先导出备份。" confirmLabel="清除全部数据" danger onConfirm={() => { void handleClearData(); setShowClearConfirm(false) }} onCancel={() => setShowClearConfirm(false)} /> : null}
+      {showClearConfirm ? <ConfirmDialog message="确定要清除全部数据吗？此操作不可撤销。建议先导出备份。" confirmLabel="清除全部数据" danger confirming={clearingData} onConfirm={() => { void handleClearData() }} onCancel={() => setShowClearConfirm(false)} /> : null}
       {restoreSnapshotId ? <ConfirmDialog message={`确定从这份快照恢复吗？恢复前会自动备份当前数据，失败时自动回滚。快照包含 ${snapshots.find((snapshot) => snapshot.id === restoreSnapshotId)?.entryCount ?? 0} 条日记。`} confirmLabel="确认恢复" danger onConfirm={() => { void handleRestoreSnapshot(restoreSnapshotId); setRestoreSnapshotId(null) }} onCancel={() => setRestoreSnapshotId(null)} /> : null}
     </main>
   )

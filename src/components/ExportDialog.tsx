@@ -8,16 +8,15 @@ import { Sheet } from './ui/Overlay'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
-  try {
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = filename
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-  } finally {
-    URL.revokeObjectURL(url)
-  }
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  // Some browsers (notably Safari) can cancel a download if the object URL
+  // is revoked in the same tick as the click.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {

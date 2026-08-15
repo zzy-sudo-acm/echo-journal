@@ -57,6 +57,8 @@ export interface Draft {
   content: string
   title: string
   tags: string[]
+  /** Media attached to the quick composer, preserved across restarts. */
+  mediaIds?: string[]
   savedAt: string
 }
 

@@ -81,8 +81,11 @@ async function sha256(blob: Blob): Promise<string> {
 
 async function buildBackupBundle(): Promise<BackupBundle> {
   const entries = await db.entries.filter((entry) => !entry.isDraft).toArray()
-  const tags = await db.tags.toCollection().toArray()
-  const tagNames = tags.map((tag) => tag.name)
+  // Derive tags from the entries being exported instead of the `tags` table:
+  // the table is write-mostly and can retain names long after they were
+  // removed from every entry, which used to leak stale tags into backups.
+  const tagNames = [...new Set(entries.flatMap((entry) => entry.tags))]
+    .sort((a, b) => a.localeCompare(b))
   const sortedEntries = [...entries].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   )

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
-import { OPEN_FULL_EDITOR_EVENT, consumeFullEditorOpenRequest } from '../utils/events'
+import { FOCUS_COMPOSER_EVENT, consumeComposerFocusRequest } from '../utils/events'
 
 function CurrentPath() {
   const { pathname } = useLocation()
@@ -24,13 +24,13 @@ describe('AppHeader', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
-    // Drain any pending editor-open intent so tests stay isolated.
-    consumeFullEditorOpenRequest()
+    // Drain any pending composer-focus intent so tests stay isolated.
+    consumeComposerFocusRequest()
   })
 
-  it('requests the full editor in place when already on the timeline', () => {
-    const openEditor = vi.fn()
-    window.addEventListener(OPEN_FULL_EDITOR_EVENT, openEditor)
+  it('requests composer focus in place when already on the timeline', () => {
+    const focusComposer = vi.fn()
+    window.addEventListener(FOCUS_COMPOSER_EVENT, focusComposer)
 
     render(
       <MemoryRouter initialEntries={['/']}>
@@ -40,14 +40,14 @@ describe('AppHeader', () => {
     )
     clickWritingButton()
 
-    expect(openEditor).toHaveBeenCalledTimes(1)
+    expect(focusComposer).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText('当前路径').textContent).toBe('/')
-    window.removeEventListener(OPEN_FULL_EDITOR_EVENT, openEditor)
+    window.removeEventListener(FOCUS_COMPOSER_EVENT, focusComposer)
   })
 
-  it('navigates home and requests the editor when on another page', () => {
-    const openEditor = vi.fn()
-    window.addEventListener(OPEN_FULL_EDITOR_EVENT, openEditor)
+  it('navigates home and requests composer focus when on another page', () => {
+    const focusComposer = vi.fn()
+    window.addEventListener(FOCUS_COMPOSER_EVENT, focusComposer)
 
     render(
       <MemoryRouter initialEntries={['/review']}>
@@ -58,10 +58,10 @@ describe('AppHeader', () => {
     clickWritingButton()
 
     expect(screen.getByLabelText('当前路径').textContent).toBe('/')
-    expect(openEditor).toHaveBeenCalledTimes(1)
-    // The pending intent survives until the timeline page consumes it.
-    expect(consumeFullEditorOpenRequest()).toBe(true)
-    window.removeEventListener(OPEN_FULL_EDITOR_EVENT, openEditor)
+    expect(focusComposer).toHaveBeenCalledTimes(1)
+    // The pending intent survives until the timeline composer consumes it.
+    expect(consumeComposerFocusRequest()).toBe(true)
+    window.removeEventListener(FOCUS_COMPOSER_EVENT, focusComposer)
   })
 
   it('treats review and trash as part of settings navigation', () => {

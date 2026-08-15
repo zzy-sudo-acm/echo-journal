@@ -27,19 +27,57 @@ function UpdatePrompt() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg) => {
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                setUpdateAvailable(true)
-              }
-            })
+    if (!('serviceWorker' in navigator)) return
+
+    let registration: ServiceWorkerRegistration | null = null
+    let interval: ReturnType<typeof setInterval> | null = null
+    const cancelled = { value: false }
+
+    const checkForUpdate = () => {
+      registration?.update().catch(() => {
+        // Best-effort; the browser also checks on its own schedule.
+      })
+    }
+
+    void navigator.serviceWorker.ready.then((reg) => {
+      if (cancelled.value) return
+      registration = reg
+
+      // A worker can already be waiting when this component mounts (e.g. an
+      // update arrived before the listener was attached).
+      if (reg.waiting) setUpdateAvailable(true)
+
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing
+        if (!newWorker) return
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            setUpdateAvailable(true)
           }
         })
       })
+
+      // With autoUpdate the new worker activates on its own; reloading is
+      // still required to pick up the new assets.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        setUpdateAvailable(true)
+      })
+
+      // Hash-routed SPA sessions never perform a real navigation, so ask the
+      // browser to check for updates on a regular cadence and when returning.
+      checkForUpdate()
+    })
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkForUpdate()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    interval = setInterval(checkForUpdate, 30 * 60 * 1000)
+
+    return () => {
+      cancelled.value = true
+      document.removeEventListener('visibilitychange', handleVisibility)
+      if (interval) clearInterval(interval)
     }
   }, [])
 

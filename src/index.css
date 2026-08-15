@@ -733,6 +733,11 @@ input:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 72%
 .composer-tag-trigger .icon { width: 17px; height: 17px; }
 .composer-save { min-width: 52px; min-height: 40px; padding: 0 4px; color: var(--accent-strong); font-size: .82rem; font-weight: 600; letter-spacing: .04em; transition: color var(--motion-fast), opacity var(--motion-fast); }
 .composer-draft-state { min-height: 1em; color: var(--text-tertiary); font-size: .68rem; letter-spacing: .03em; text-align: right; animation: fade-in var(--motion-fast) ease both; }
+.composer-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 8px; }
+.composer-media-thumb { position: relative; display: block; width: 56px; height: 56px; overflow: hidden; border: 1px solid var(--border-light); border-radius: 10px; background: var(--bg-tertiary); }
+.composer-media-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.composer-media-thumb button { position: absolute; top: 2px; right: 2px; display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--bg-primary) 78%, transparent); color: var(--text-primary); }
+.composer-media-thumb button .icon { width: 11px; height: 11px; }
 .composer-save:hover { color: var(--text-primary); }
 
 .calendar-layout { display: grid; gap: 34px; }

@@ -6,7 +6,7 @@ import { useEntryStore } from '../store/entryStore'
 import { useOnThisDayEntries } from '../db/live'
 import { useEntryActions } from '../hooks/useEntryActions'
 import { useToast } from '../components/ToastContext'
-import { getLocalDateString, toLocalDate } from '../utils/date'
+import { getLocalDateString, parseLocalDateString, toLocalDate } from '../utils/date'
 import type { Entry, CreateEntryInput } from '../db/models'
 
 export function ReviewPage() {
@@ -14,7 +14,9 @@ export function ReviewPage() {
   const { deletingEntry, requestDelete, cancelDelete, confirmDelete } = useEntryActions()
   const { updateEntry } = useEntryStore()
   const { showToast } = useToast()
-  const today = new Date()
+  // Fresh across midnight: subscribing re-runs on the date-change action.
+  const todayDate = useEntryStore((state) => state.todayDate)
+  const today = parseLocalDateString(todayDate)
   const month = today.getMonth()
   const day = today.getDate()
 

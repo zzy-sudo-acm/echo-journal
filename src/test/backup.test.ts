@@ -129,6 +129,27 @@ describe('Backup Generation', () => {
     expect(preview.trashEntryCount).toBe(1)
   })
 
+  it('should derive exported tags from entries instead of the write-mostly tags table', async () => {
+    const entry = await entryRepo.create({ content: '先有标签', tags: ['旧标签'] })
+    await entryRepo.update(entry.id, { tags: [] })
+
+    // Removing the tag from the entry leaves db.tags untouched; the backup
+    // must not resurrect it, and tagCount must reflect the real entries.
+    const data = await generateBackupData()
+    expect(data.tags).toEqual([])
+    expect(data.manifest.tagCount).toBe(0)
+  })
+
+  it('should keep tags that still exist on soft-deleted entries in backup.json', async () => {
+    await entryRepo.create({ content: '正常', tags: ['保留'] })
+    const deleted = await entryRepo.create({ content: '已删', tags: ['保留', '回收站'] })
+    await entryRepo.delete(deleted.id)
+
+    const data = await generateBackupData()
+    expect(data.tags).toEqual(['保留', '回收站'])
+    expect(data.manifest.tagCount).toBe(2)
+  })
+
   it('should create a real ZIP export blob', async () => {
     await entryRepo.create({ content: '测试' })
     const blob = await createExportZip()

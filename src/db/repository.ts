@@ -355,21 +355,25 @@ export const entryRepo = {
 }
 
 export const draftRepo = {
-  async save(draft: { content: string; title: string; tags: string[] }): Promise<void> {
+  async save(draft: { content: string; title: string; tags: string[]; mediaIds?: string[] }): Promise<void> {
     await db.drafts.put({
       id: 'current',
-      ...draft,
+      content: draft.content,
+      title: draft.title,
+      tags: draft.tags,
+      mediaIds: draft.mediaIds ?? [],
       savedAt: nowISO(),
     })
   },
 
-  async get(): Promise<{ content: string; title: string; tags: string[] } | null> {
+  async get(): Promise<{ content: string; title: string; tags: string[]; mediaIds: string[] } | null> {
     const draft = await db.drafts.get('current')
     if (!draft) return null
     return {
       content: draft.content,
       title: draft.title,
       tags: draft.tags,
+      mediaIds: draft.mediaIds ?? [],
     }
   },
 
@@ -535,8 +539,9 @@ export async function cleanupOrphanMedia(candidateIds?: Iterable<string>): Promi
     : [...new Set(normalizeIds(candidateIds).filter((mediaId) => mediaId))]
   if (normalizedCandidates?.length === 0) return 0
 
-  return db.transaction('rw', [db.entries, db.snapshots, db.media], async () => {
+  return db.transaction('rw', [db.entries, db.drafts, db.snapshots, db.media], async () => {
     const entries = await db.entries.toArray()
+    const drafts = await db.drafts.toArray()
     const snapshots = await db.snapshots.toArray()
     const candidates = normalizedCandidates
       ? (await db.media.bulkGet(normalizedCandidates)).filter(
@@ -549,6 +554,14 @@ export async function cleanupOrphanMedia(candidateIds?: Iterable<string>): Promi
     const referencedIds = new Set<string>()
     for (const entry of entries) {
       for (const mediaId of collectMediaIds(entry.richContent)) referencedIds.add(mediaId)
+    }
+
+    // The quick composer's auto-saved draft owns its attached media too;
+    // deleting a Blob the restored draft still displays would break it.
+    for (const draft of drafts) {
+      for (const mediaId of draft.mediaIds ?? []) {
+        if (typeof mediaId === 'string' && mediaId) referencedIds.add(mediaId)
+      }
     }
 
     for (const snapshot of snapshots) {
@@ -574,4 +587,25 @@ export const settingsRepo = {
   async set(key: string, value: unknown): Promise<void> {
     await db.settings.put({ key, value })
   },
+}
+
+/**
+ * Clear every business-data table in one read-write transaction. A failure
+ * in any table aborts the whole transaction, so a mid-way IndexedDB error can
+ * never leave the journal half-cleared. Settings are intentionally kept.
+ */
+export async function clearAllData(): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.entries, db.drafts, db.tags, db.snapshots, db.media],
+    async () => {
+      await Promise.all([
+        db.entries.clear(),
+        db.drafts.clear(),
+        db.tags.clear(),
+        db.snapshots.clear(),
+        db.media.clear(),
+      ])
+    },
+  )
 }

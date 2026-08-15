@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUIStore } from '../store/uiStore'
-import { requestFullEditorOpen } from '../utils/events'
+import { requestComposerFocus } from '../utils/events'
 import { MoonIcon, SunIcon } from './Icons'
 
 const desktopNavigation = [
@@ -50,15 +50,16 @@ export function AppHeader() {
     }, { once: true })
   }
 
-  // Cross-page safe: the timeline consumes the pending request when it mounts.
-  const openFullEditor = () => {
+  // Cross-page safe: the timeline composer consumes the pending request when
+  // it mounts. Lands the caret in the quick composer with the keyboard up.
+  const openComposer = () => {
     if (pathname !== '/') navigate('/')
-    requestFullEditorOpen()
+    requestComposerFocus()
   }
 
   const handleDesktopWritingClick = (event: MouseEvent<HTMLButtonElement>) => {
     playDesktopNavigationFeedback(event.currentTarget)
-    openFullEditor()
+    openComposer()
   }
 
   const handleWritingClick = () => {
@@ -76,7 +77,7 @@ export function AppHeader() {
       ) ?? null
     }
 
-    openFullEditor()
+    openComposer()
   }
 
   const handleThemeToggle = () => {

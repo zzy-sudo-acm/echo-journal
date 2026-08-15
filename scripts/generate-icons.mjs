@@ -21,6 +21,17 @@ const foregroundSizes = {
   'mipmap-xxxhdpi': 432,
 }
 
+// Web PWA icons. Chrome needs raster PNGs for reliable installability, and
+// iOS ignores manifest icons entirely — it reads apple-touch-icon instead.
+// The maskable/apple variants are flattened onto the icon background so the
+// artwork stays centered and opaque in every host mask.
+const webIcons = {
+  'public/icon-192.png': { size: 192, flatten: false },
+  'public/icon-512.png': { size: 512, flatten: false },
+  'public/icon-maskable-512.png': { size: 512, flatten: true },
+  'public/apple-touch-icon.png': { size: 180, flatten: true },
+}
+
 async function generate() {
   const baseRes = 'android/app/src/main/res'
 
@@ -37,6 +48,15 @@ async function generate() {
     const dir = join(baseRes, density)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     await sharp(svg).resize(size, size).png().toFile(join(dir, 'ic_launcher_foreground.png'))
+  }
+
+  // Generate web/PWA raster icons
+  for (const [path, { size, flatten }] of Object.entries(webIcons)) {
+    const pipeline = flatten
+      ? sharp(svg).resize(size, size).flatten({ background: '#11110F' })
+      : sharp(svg).resize(size, size)
+    await pipeline.png().toFile(path)
+    console.log(`  ${path}: ${size}x${size}${flatten ? ' (flattened)' : ''}`)
   }
 
   console.log('Android icons generated.')

@@ -5,16 +5,19 @@ const EXPORT_DIRECTORY = 'echo-journal-exports'
 const EXPORT_FILE_PREFIX = 'echo-journal-backup-'
 const NATIVE_WRITE_CHUNK_BYTES = 1024 * 1024
 
+/** Uint8Array → binary string without pushing 32k+ arguments onto the stack. */
+function bytesToBinaryString(bytes: Uint8Array): string {
+  const parts: string[] = []
+  const step = 0x2000
+  for (let offset = 0; offset < bytes.length; offset += step) {
+    parts.push(String.fromCharCode(...bytes.subarray(offset, offset + step)))
+  }
+  return parts.join('')
+}
+
 async function blobChunkToBase64(blob: Blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer())
-  const chunks: string[] = []
-  const chunkSize = 0x8000
-
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)))
-  }
-
-  return btoa(chunks.join(''))
+  return btoa(bytesToBinaryString(bytes))
 }
 
 /**

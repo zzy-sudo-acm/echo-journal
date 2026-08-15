@@ -127,4 +127,62 @@ describe('QuickInput', () => {
     const draft = await draftRepo.get()
     expect(draft).toBeNull()
   })
+
+  it('flushes a pending debounce draft when unmounted before the timer fires', async () => {
+    const view = render(<QuickInput />)
+    const textarea = screen.getByPlaceholderText('这里还很安静')
+
+    fireEvent.focus(textarea)
+    fireEvent.change(textarea, { target: { value: '刚写完就切走的内容' } })
+
+    // The visible "saving" label means draftLoaded=true and the 600ms timer
+    // has been scheduled; unmounting now would previously cancel it.
+    await screen.findByText('存草稿中…')
+    view.unmount()
+
+    await waitFor(async () => {
+      const draft = await draftRepo.get()
+      expect(draft?.content).toBe('刚写完就切走的内容')
+    })
+  })
+
+  it('stores lightweight markup as rich content on save', async () => {
+    render(<QuickInput />)
+    const textarea = screen.getByPlaceholderText('这里还很安静')
+
+    fireEvent.focus(textarea)
+    fireEvent.change(textarea, { target: { value: '## 今天的收获\n- 读了书\n- 跑了步' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+    await waitFor(async () => {
+      const entries = await db.entries.toArray()
+      expect(entries).toHaveLength(1)
+      const rich = entries[0].richContent
+      expect(rich).toBeTruthy()
+      expect(rich!.content![0]).toMatchObject({ type: 'heading', attrs: { level: 2 } })
+      expect(rich!.content![1].type).toBe('bulletList')
+      // Plain-text mirror stays searchable
+      expect(entries[0].content).toContain('今天的收获')
+    })
+  })
+
+  it('restores images attached to a saved quick-composer draft', async () => {
+    await db.media.put({
+      id: 'draft-media',
+      blob: new Blob(['x'], { type: 'image/png' }),
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+      createdAt: new Date().toISOString(),
+    })
+    await draftRepo.save({ content: '带图草稿', title: '', tags: [], mediaIds: ['draft-media'] })
+
+    render(<QuickInput />)
+
+    // The restored draft shows its image thumb and keeps mediaIds for the
+    // next auto-save / unmount flush.
+    expect(await screen.findByLabelText('移除图片')).toBeTruthy()
+    const draft = await draftRepo.get()
+    expect(draft?.mediaIds).toEqual(['draft-media'])
+  })
 })
